@@ -1,0 +1,9 @@
+# Ceedling build artifacts
+build/
+
+# Editor junk
+*.swp
+*.log
+
+# OS junk
+.DS_Store
