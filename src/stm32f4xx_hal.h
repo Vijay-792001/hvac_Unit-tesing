@@ -67,5 +67,21 @@ void HAL_GPIO_Init(GPIO_TypeDef *GPIOx, GPIO_InitTypeDef *GPIO_Init);
 void HAL_GPIO_WritePin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, GPIO_PinState PinState);
 
 
+/* =========================
+ * ADC (needed for position_sensing.c)
+ * ========================= */
+
+/* Dummy ADC handle */
+typedef struct {
+    int dummy;
+} ADC_HandleTypeDef;
+
+/* HAL ADC APIs to be mocked by CMock */
+HAL_StatusTypeDef HAL_ADC_Start(ADC_HandleTypeDef *hadc);
+HAL_StatusTypeDef HAL_ADC_PollForConversion(ADC_HandleTypeDef *hadc, uint32_t Timeout);
+uint32_t HAL_ADC_GetValue(ADC_HandleTypeDef *hadc);
+
+
+
 #endif
 
