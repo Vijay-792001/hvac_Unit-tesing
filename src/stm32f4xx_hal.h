@@ -83,5 +83,29 @@ uint32_t HAL_ADC_GetValue(ADC_HandleTypeDef *hadc);
 
 
 
+/* =========================
+ * TIM / PWM (needed for motor_controller.c)
+ * ========================= */
+ 
+ /* Fake GPIO port instance for GPIOB */
+extern GPIO_TypeDef GPIOB_inst;
+#define GPIOB (&GPIOB_inst)
+
+/* Dummy TIM handle */
+typedef struct {
+    int dummy;
+} TIM_HandleTypeDef;
+
+/* Channel define used in your code */
+#define TIM_CHANNEL_1 (1U)
+
+/* HAL TIM APIs to be mocked */
+HAL_StatusTypeDef HAL_TIM_PWM_Start(TIM_HandleTypeDef *htim, uint32_t Channel);
+HAL_StatusTypeDef HAL_TIM_PWM_Stop(TIM_HandleTypeDef *htim, uint32_t Channel);
+
+
+
+
+
 #endif
 
