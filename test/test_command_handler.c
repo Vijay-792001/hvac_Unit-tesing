@@ -2,56 +2,95 @@
 #include "command_handler.h"
 #include "mock_stm32f4xx_hal.h"
 
-void setUp(void)
+void setUp(void) {}
+void tearDown(void) {}
+
+/* CH_01: Accept valid command '0' */
+void test_CH_01_Accept_valid_command_0(void)
 {
+    UART_HandleTypeDef dummy_uart;
+    uint8_t cmd_out = 88; // Initialize changed if valid
+    uint8_t input = '0';
+    HAL_UART_Receive_ExpectAndReturn(&dummy_uart, &input, 1, 100, HAL_OK);
+
+    int ret = CommandHandler_PollCommand(&cmd_out);
+    TEST_ASSERT_EQUAL(1, ret);
+    TEST_ASSERT_EQUAL_UINT8(0, cmd_out);
 }
 
-void tearDown(void)
+/* CH_02: Accept valid command '5' (upper bound) */
+void test_CH_02_Accept_valid_command_5(void)
 {
+    UART_HandleTypeDef dummy_uart;
+    uint8_t cmd_out = 99;
+    uint8_t input = '5';
+    HAL_UART_Receive_ExpectAndReturn(&dummy_uart, &input, 1, 100, HAL_OK);
+
+    int ret = CommandHandler_PollCommand(&cmd_out);
+    TEST_ASSERT_EQUAL(1, ret);
+    TEST_ASSERT_EQUAL_UINT8(5, cmd_out);
 }
 
-/* Test ID: CMDH-1 Test valid command received */
-void test_CommandHandler_ProcessCommand_ValidCommand_ShouldSucceed(void)
+/* CH_03: Reject numeric out-of-range command */
+void test_CH_03_Reject_numeric_out_of_range_command(void)
 {
-    uint8_t valid_command = 0x01; // Assume this is a valid command per spec
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
-    int result = CommandHandler_ProcessCommand(valid_command);
-    TEST_ASSERT_EQUAL(0, result);
+    UART_HandleTypeDef dummy_uart;
+    uint8_t cmd_out = 0xA4;
+    uint8_t input = '8';
+    HAL_UART_Receive_ExpectAndReturn(&dummy_uart, &input, 1, 100, HAL_OK);
+
+    int ret = CommandHandler_PollCommand(&cmd_out);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(0xA4, cmd_out); // Should not change
 }
 
-/* Test ID: CMDH-2 Test invalid command received */
-void test_CommandHandler_ProcessCommand_InvalidCommand_ShouldReturnError(void)
+/* CH_04: Reject non-numeric command */
+void test_CH_04_Reject_non_numeric_command(void)
 {
-    uint8_t invalid_command = 0xFF; // Out of range/invalid per spec
-    int result = CommandHandler_ProcessCommand(invalid_command);
-    TEST_ASSERT_EQUAL(-1, result);
+    UART_HandleTypeDef dummy_uart;
+    uint8_t cmd_out = 0xBB;
+    uint8_t input = 'x';
+    HAL_UART_Receive_ExpectAndReturn(&dummy_uart, &input, 1, 100, HAL_OK);
+
+    int ret = CommandHandler_PollCommand(&cmd_out);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(0xBB, cmd_out);
 }
 
-/* Test ID: CMDH-3 Test NULL pointer passed – ignore if not applicable (API takes value not pointer) */
-
-/* Test ID: CMDH-4 Test boundary value (lowest legal command) */
-void test_CommandHandler_ProcessCommand_LowestBoundary_ShouldSucceed(void)
+/* CH_05: Reject UART receive failure */
+void test_CH_05_Reject_UART_receive_failure(void)
 {
-    uint8_t lowest_command = 0x00; // Assume 0x00 is valid
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-    int result = CommandHandler_ProcessCommand(lowest_command);
-    TEST_ASSERT_EQUAL(0, result);
+    UART_HandleTypeDef dummy_uart;
+    uint8_t cmd_out = 0xCD;
+    uint8_t input = '2';
+    HAL_UART_Receive_ExpectAndReturn(&dummy_uart, &input, 1, 100, HAL_ERROR);
+
+    int ret = CommandHandler_PollCommand(&cmd_out);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(0xCD, cmd_out);
 }
 
-/* Test ID: CMDH-5 Test boundary value (highest legal command) */
-void test_CommandHandler_ProcessCommand_HighestBoundary_ShouldSucceed(void)
+/* CH_06: Handle NULL pointer safely */
+void test_CH_06_Handle_NULL_pointer_safely(void)
 {
-    uint8_t highest_command = 0x02; // Assume 0x02 is highest valid
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
-    int result = CommandHandler_ProcessCommand(highest_command);
-    TEST_ASSERT_EQUAL(0, result);
+    UART_HandleTypeDef dummy_uart;
+    uint8_t input = '1';
+    HAL_UART_Receive_ExpectAndReturn(&dummy_uart, &input, 1, 100, HAL_OK);
+
+    // Should not crash if NULL
+    (void)CommandHandler_PollCommand(NULL);
+    // No assertion—test passes if no crash
 }
 
-/* Test ID: CMDH-6 Ensure command side-effects (e.g. calls to HAL only on valid command) */
-void test_CommandHandler_ProcessCommand_InvalidCommand_ShouldNotCallHal(void)
+/* CH_07: Do not modify output on invalid data */
+void test_CH_07_Do_not_modify_output_on_invalid_data(void)
 {
-    uint8_t invalid_command = 0xFE;
-    int result = CommandHandler_ProcessCommand(invalid_command);
-    TEST_ASSERT_EQUAL(-1, result);
-    // No HAL_GPIO_WritePin calls expected; CMock will check.
+    UART_HandleTypeDef dummy_uart;
+    uint8_t cmd_out = 0x5A;
+    uint8_t input = '9';
+    HAL_UART_Receive_ExpectAndReturn(&dummy_uart, &input, 1, 100, HAL_OK);
+
+    int ret = CommandHandler_PollCommand(&cmd_out);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(0x5A, cmd_out);
 }
