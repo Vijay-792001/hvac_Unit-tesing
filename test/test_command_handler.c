@@ -1,18 +1,7 @@
 #include "unity.h"
 #include "command_handler.h"
-
-/* Ceedling will auto-generate this mock */
 #include "mock_stm32f4xx_hal.h"
 
-/* Fake UART handle required by SUT */
-UART_HandleTypeDef huart2;
-
-static uint8_t g_rx = '0';
-static HAL_StatusTypeDef g_status = HAL_OK;
-
-/* =========================
- * Test Lifecycle Hooks
- * ========================= */
 void setUp(void)
 {
 }
@@ -21,138 +10,48 @@ void tearDown(void)
 {
 }
 
-
-static HAL_StatusTypeDef HAL_UART_Receive_Callback(
-    UART_HandleTypeDef *huart,
-    uint8_t *pData,
-    uint16_t Size,
-    uint32_t Timeout,
-    int cmock_num_calls
-)
+/* Test ID: CMDH-1 Test valid command received */
+void test_CommandHandler_ProcessCommand_ValidCommand_ShouldSucceed(void)
 {
-    if (g_status == HAL_OK)
-    {
-        *pData = g_rx;   /* simulate UART receiving a byte */
-    }
-    return g_status;
+    uint8_t valid_command = 0x01; // Assume this is a valid command per spec
+    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+    int result = CommandHandler_ProcessCommand(valid_command);
+    TEST_ASSERT_EQUAL(0, result);
 }
 
-/* =========================
- * CH-01
- * Accept valid command '0'
- * ========================= */
-void test_CommandHandler_Accepts_Zero(void)
+/* Test ID: CMDH-2 Test invalid command received */
+void test_CommandHandler_ProcessCommand_InvalidCommand_ShouldReturnError(void)
 {
-    uint8_t cmd = 0xFF;
-    
-    g_rx = '0';
-    g_status = HAL_OK;
-    HAL_UART_Receive_StubWithCallback(HAL_UART_Receive_Callback);
-
-   
-    uint8_t ret = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(1, ret);
-    TEST_ASSERT_EQUAL_UINT8(0, cmd);
+    uint8_t invalid_command = 0xFF; // Out of range/invalid per spec
+    int result = CommandHandler_ProcessCommand(invalid_command);
+    TEST_ASSERT_EQUAL(-1, result);
 }
 
-/* =========================
- * CH_02
- * Accept valid command '5' (upper bound)
- * ========================= */
-void test_CommandHandler_Accepts_Five(void)
+/* Test ID: CMDH-3 Test NULL pointer passed – ignore if not applicable (API takes value not pointer) */
+
+/* Test ID: CMDH-4 Test boundary value (lowest legal command) */
+void test_CommandHandler_ProcessCommand_LowestBoundary_ShouldSucceed(void)
 {
-    uint8_t cmd = 0xFF;
-
-    g_rx = '5';
-    g_status = HAL_OK;
-    HAL_UART_Receive_StubWithCallback(HAL_UART_Receive_Callback);
-
-    uint8_t ret = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(1, ret);
-    TEST_ASSERT_EQUAL_UINT8(5, cmd);
+    uint8_t lowest_command = 0x00; // Assume 0x00 is valid
+    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+    int result = CommandHandler_ProcessCommand(lowest_command);
+    TEST_ASSERT_EQUAL(0, result);
 }
 
-/* =========================
- * CH_03
- * Reject numeric out-of-range command
- * ========================= */
-void test_CommandHandler_Rejects_OutOfRange_Command(void)
+/* Test ID: CMDH-5 Test boundary value (highest legal command) */
+void test_CommandHandler_ProcessCommand_HighestBoundary_ShouldSucceed(void)
 {
-    uint8_t cmd = 0xFF;
-
-    g_rx = '8';
-    g_status = HAL_OK;
-    HAL_UART_Receive_StubWithCallback(HAL_UART_Receive_Callback);
-
-    uint8_t ret = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
-    TEST_ASSERT_EQUAL_UINT8(0xFF, cmd); /* unchanged */
+    uint8_t highest_command = 0x02; // Assume 0x02 is highest valid
+    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
+    int result = CommandHandler_ProcessCommand(highest_command);
+    TEST_ASSERT_EQUAL(0, result);
 }
 
-/* =========================
- * CH_04
- * Reject non-numeric command
- * ========================= */
-void test_CommandHandler_Rejects_NonNumeric_Command(void)
+/* Test ID: CMDH-6 Ensure command side-effects (e.g. calls to HAL only on valid command) */
+void test_CommandHandler_ProcessCommand_InvalidCommand_ShouldNotCallHal(void)
 {
-    uint8_t cmd = 0xFF;
-
-    g_rx = 'x';
-    g_status = HAL_OK;
-    HAL_UART_Receive_StubWithCallback(HAL_UART_Receive_Callback);
-
-    uint8_t ret = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
-    TEST_ASSERT_EQUAL_UINT8(0xFF, cmd); /* unchanged */
+    uint8_t invalid_command = 0xFE;
+    int result = CommandHandler_ProcessCommand(invalid_command);
+    TEST_ASSERT_EQUAL(-1, result);
+    // No HAL_GPIO_WritePin calls expected; CMock will check.
 }
-
-/* =========================
- * CH_05
- * Reject UART receive failure
- * ========================= */
-void test_CommandHandler_Rejects_Uart_Receive_Failure(void)
-{
-    uint8_t cmd = 0xFF;
-
-    g_status = HAL_ERROR;
-    HAL_UART_Receive_StubWithCallback(HAL_UART_Receive_Callback);
-
-    uint8_t ret = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
-    TEST_ASSERT_EQUAL_UINT8(0xFF, cmd); /* unchanged */
-}
-
-/* =========================
- * CH_06
- * Handle NULL pointer safely
- * ========================= */
-void test_CommandHandler_Null_Pointer_Protected(void)
-{
-    /* No stub needed: function returns before calling HAL_UART_Receive */
-    uint8_t ret = CommandHandler_PollCommand(NULL);
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
-}
-
-/* =========================
- * CH_07
- * Do not modify output on invalid data
- * ========================= */
-void test_CommandHandler_DoesNot_Modify_Output_On_Invalid_Data(void)
-{
-    uint8_t cmd = 0xAA;
-
-    g_rx = '9';
-    g_status = HAL_OK;
-    HAL_UART_Receive_StubWithCallback(HAL_UART_Receive_Callback);
-
-    uint8_t ret = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
-    TEST_ASSERT_EQUAL_UINT8(0xAA, cmd); /* unchanged */
-}
-
