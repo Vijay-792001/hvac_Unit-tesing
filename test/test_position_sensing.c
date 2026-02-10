@@ -1,117 +1,28 @@
-/* test_position_sensing.c */
+/* ===== test_position_sensing.c ===== */
 #include "unity.h"
 #include "position_sensing.h"
 #include "mock_stm32f4xx_hal.h"
-
-ADC_HandleTypeDef hadc1;
-
-void setUp(void)
-{
-    mock_stm32f4xx_hal_Init();
+// TEST PLAN: TC-PS-001 - Get current position, normal
+void test_PositionSensing_GetPosition_Normal_ShouldReturnValue(void) {
+    HAL_ADC_Read_ExpectAndReturn(ADC_CHANNEL_POSITION, 50);
+    int pos = position_sensing_get_position();
+    TEST_ASSERT_EQUAL(50, pos);
 }
-
-void tearDown(void)
-{
-    mock_stm32f4xx_hal_Verify();
-    mock_stm32f4xx_hal_Destroy();
+// TEST PLAN: TC-PS-002 - Out-of-range low ADC value
+void test_PositionSensing_GetPosition_ADCTooLow_ShouldClampZero(void) {
+    HAL_ADC_Read_ExpectAndReturn(ADC_CHANNEL_POSITION, -12);
+    int pos = position_sensing_get_position();
+    TEST_ASSERT_EQUAL(0, pos);
 }
-
-void test_PositionSensing_Init_ResetsState_PS01(void)
-{
-    PositionSensing_Init();
+// TEST PLAN: TC-PS-003 - Out-of-range high ADC value
+void test_PositionSensing_GetPosition_ADCHigh_ShouldClampMax(void) {
+    HAL_ADC_Read_ExpectAndReturn(ADC_CHANNEL_POSITION, 1025);
+    int pos = position_sensing_get_position();
+    TEST_ASSERT_EQUAL(100, pos);
 }
-
-void test_PositionSensing_Update_ValidADC_PS02(void)
-{
-    uint16_t adc_value = 4100;
-    HAL_ADC_Start_Expect(&hadc1);
-    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
-    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, adc_value);
-
-    PositionSensing_Update();
-
-    uint8_t pos;
-    uint8_t valid = PositionSensing_GetPosition(&pos);
-    TEST_ASSERT_EQUAL_UINT8(1, valid);
-    TEST_ASSERT_EQUAL_UINT8(0, pos);
-    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_IsValid());
-}
-
-void test_PositionSensing_Update_PollErrorInvalid_PS03(void)
-{
-    HAL_ADC_Start_Expect(&hadc1);
-    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_TIMEOUT);
-
-    PositionSensing_Update();
-
-    uint8_t pos;
-    uint8_t valid = PositionSensing_GetPosition(&pos);
-    TEST_ASSERT_EQUAL_UINT8(0, valid);
-    TEST_ASSERT_EQUAL_UINT8(0, PositionSensing_IsValid());
-}
-
-void test_PositionSensing_IsAtTarget_TargetInvalidRange_PS04(void)
-{
-    uint8_t ret = PositionSensing_IsAtTarget(7);
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
-}
-
-void test_PositionSensing_IsAtTarget_WithinRange_PS05(void)
-{
-    uint16_t adc_value = 4057;
-    HAL_ADC_Start_Expect(&hadc1);
-    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
-    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, adc_value);
-
-    PositionSensing_Update();
-
-    uint8_t ret = PositionSensing_IsAtTarget(0);
-    TEST_ASSERT_EQUAL_UINT8(1, ret);
-}
-
-void test_PositionSensing_IsAtTarget_ADCOutsideStopRange_PS06(void)
-{
-    uint16_t adc_value = 3500;
-    HAL_ADC_Start_Expect(&hadc1);
-    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
-    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, adc_value);
-
-    PositionSensing_Update();
-
-    uint8_t ret = PositionSensing_IsAtTarget(0);
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
-}
-
-void test_PositionSensing_GetPosition_NullPointer_PS07(void)
-{
-    uint8_t ret = PositionSensing_GetPosition(NULL);
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
-}
-
-void test_PositionSensing_GetPosition_FailsIfInvalid_PS08(void)
-{
-    HAL_ADC_Start_Expect(&hadc1);
-    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_TIMEOUT);
-
-    PositionSensing_Update();
-
-    uint8_t tgt = 0xFF;
-    uint8_t ret = PositionSensing_GetPosition(&tgt);
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
-}
-
-void test_PositionSensing_IsValid_ReturnsFlag_PS09(void)
-{
-    uint16_t adc_value = 3300;
-    HAL_ADC_Start_Expect(&hadc1);
-    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
-    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, adc_value);
-
-    PositionSensing_Update();
-
-    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_IsValid());
-    HAL_ADC_Start_Expect(&hadc1);
-    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_ERROR);
-    PositionSensing_Update();
-    TEST_ASSERT_EQUAL_UINT8(0, PositionSensing_IsValid());
+// TEST PLAN: TC-PS-004 - HAL returns error code
+void test_PositionSensing_GetPosition_HALError_ShouldReturnError(void) {
+    HAL_ADC_Read_ExpectAndReturn(ADC_CHANNEL_POSITION, -1000); // convention: < 0 is error
+    int pos = position_sensing_get_position();
+    TEST_ASSERT_EQUAL(PS_ERR_HAL, pos);
 }

@@ -1,89 +1,76 @@
-/* test_command_handler.c */
+/* ===== test_command_handler.c ===== */
 #include "unity.h"
 #include "command_handler.h"
-#include "mock_stm32f4xx_hal.h"
+#include "mock_motor_controller.h"
+#include "mock_status_indicator.h"
+#include "mock_position_sensing.h"
+// Additional necessary standard headers
+#include <string.h>
+// TEST PLAN: TC-CH-001 - Process valid command (START)
+void test_CommandHandler_ProcessCommand_StartCommand_ShouldStartMotor_AndShowRunningStatus(void) {
+    Command_t cmd;
+    cmd.type = CMD_START;
+    cmd.param = 0;
 
-UART_HandleTypeDef huart2;
+    motor_controller_start_ExpectAndReturn(MOTOR_ID_MAIN, 0);
+    status_indicator_set_ExpectAndReturn(STATUS_RUNNING, 0);
 
-void setUp(void)
-{
-    mock_stm32f4xx_hal_Init();
+    int result = CommandHandler_ProcessCommand(&cmd);
+    TEST_ASSERT_EQUAL(0, result);
 }
+// TEST PLAN: TC-CH-002 - Process valid command (STOP)
+void test_CommandHandler_ProcessCommand_StopCommand_ShouldStopMotor_AndShowIdleStatus(void) {
+    Command_t cmd;
+    cmd.type = CMD_STOP;
+    cmd.param = 0;
 
-void tearDown(void)
-{
-    mock_stm32f4xx_hal_Verify();
-    mock_stm32f4xx_hal_Destroy();
+    motor_controller_stop_ExpectAndReturn(MOTOR_ID_MAIN, 0);
+    status_indicator_set_ExpectAndReturn(STATUS_IDLE, 0);
+
+    int result = CommandHandler_ProcessCommand(&cmd);
+    TEST_ASSERT_EQUAL(0, result);
 }
+// TEST PLAN: TC-CH-003 - Set position command with valid argument
+void test_CommandHandler_ProcessCommand_SetPosition_ShouldInvokeMotorMoveToAndShowCalibrating(void) {
+    Command_t cmd;
+    cmd.type = CMD_SET_POSITION;
+    cmd.param = 75;
 
-void test_CommandHandler_PollCommand_Returns0_WhenCmdOutIsNULL_CH06(void)
-{
-    uint8_t result;
-    result = CommandHandler_PollCommand(NULL);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, result, "Should return 0 when cmd_out is NULL (CH-06)");
+    motor_controller_move_to_ExpectAndReturn(MOTOR_ID_MAIN, 75, 0);
+    status_indicator_set_ExpectAndReturn(STATUS_CALIBRATING, 0);
+
+    int result = CommandHandler_ProcessCommand(&cmd);
+    TEST_ASSERT_EQUAL(0, result);
 }
+// TEST PLAN: TC-CH-004 - Unknown command
+void test_CommandHandler_ProcessCommand_UnknownCommand_ShouldReturnError(void) {
+    Command_t cmd;
+    cmd.type = 99; // invalid command code
+    cmd.param = 0;
 
-void test_CommandHandler_PollCommand_NoDataReceived_Returns0_CH01_CH02(void)
-{
-    uint8_t output;
-    HAL_UART_Receive_ExpectAndReturn(&huart2, &output, 1, 10, HAL_ERROR);
-
-    uint8_t ret = CommandHandler_PollCommand(&output);
-
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    int result = CommandHandler_ProcessCommand(&cmd);
+    TEST_ASSERT_EQUAL(COMMAND_ERR_INVALID_CMD, result);
 }
-
-void test_CommandHandler_PollCommand_InvalidCharacter_Returns0_CH03(void)
-{
-    uint8_t output = 0xAA;
-    uint8_t temp_rx = (uint8_t)'x';
-
-    HAL_UART_Receive_ExpectAnyArgsAndReturn(HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&temp_rx,1);
-
-    uint8_t ret = CommandHandler_PollCommand(&output);
-
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
+// TEST PLAN: TC-CH-005 - NULL Command pointer parameter
+void test_CommandHandler_ProcessCommand_NullPointer_ShouldReturnError(void) {
+    int result = CommandHandler_ProcessCommand(NULL);
+    TEST_ASSERT_EQUAL(COMMAND_ERR_NULL_POINTER, result);
 }
+// TEST PLAN: TC-CH-006 - Set position with out-of-range position (too high)
+void test_CommandHandler_ProcessCommand_SetPosition_TooHigh_ShouldReturnError(void) {
+    Command_t cmd;
+    cmd.type = CMD_SET_POSITION;
+    cmd.param = 101; // Out of range
 
-void test_CommandHandler_PollCommand_ReceivesZero_Returns1_SetsCmdOutTo0_CH04(void)
-{
-    uint8_t output = 0xAA;
-    uint8_t temp_rx = (uint8_t)'0';
-
-    HAL_UART_Receive_ExpectAnyArgsAndReturn(HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&temp_rx,1);
-
-    uint8_t ret = CommandHandler_PollCommand(&output);
-
-    TEST_ASSERT_EQUAL_UINT8(1, ret);
-    TEST_ASSERT_EQUAL_UINT8(0, output);
+    int result = CommandHandler_ProcessCommand(&cmd);
+    TEST_ASSERT_EQUAL(COMMAND_ERR_OUT_OF_RANGE, result);
 }
+// TEST PLAN: TC-CH-007 - Set position with out-of-range position (too low)
+void test_CommandHandler_ProcessCommand_SetPosition_TooLow_ShouldReturnError(void) {
+    Command_t cmd;
+    cmd.type = CMD_SET_POSITION;
+    cmd.param = -1; // Out of range
 
-void test_CommandHandler_PollCommand_ReceivesFive_Returns1_SetsCmdOutTo5_CH05(void)
-{
-    uint8_t output = 0xAA;
-    uint8_t temp_rx = (uint8_t)'5';
-
-    HAL_UART_Receive_ExpectAnyArgsAndReturn(HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&temp_rx,1);
-
-    uint8_t ret = CommandHandler_PollCommand(&output);
-
-    TEST_ASSERT_EQUAL_UINT8(1, ret);
-    TEST_ASSERT_EQUAL_UINT8(5, output);
-}
-
-void test_CommandHandler_PollCommand_ReceivesThree_Returns1_SetsCmdOutTo3_CH07(void)
-{
-    uint8_t output = 0xFF;
-    uint8_t temp_rx = (uint8_t)'3';
-
-    HAL_UART_Receive_ExpectAnyArgsAndReturn(HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&temp_rx,1);
-
-    uint8_t ret = CommandHandler_PollCommand(&output);
-
-    TEST_ASSERT_EQUAL_UINT8(1, ret);
-    TEST_ASSERT_EQUAL_UINT8(3, output);
+    int result = CommandHandler_ProcessCommand(&cmd);
+    TEST_ASSERT_EQUAL(COMMAND_ERR_OUT_OF_RANGE, result);
 }
