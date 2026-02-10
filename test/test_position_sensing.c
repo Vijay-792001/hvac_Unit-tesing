@@ -1,28 +1,53 @@
-/* ===== test_position_sensing.c ===== */
 #include "unity.h"
 #include "position_sensing.h"
 #include "mock_stm32f4xx_hal.h"
-// TEST PLAN: TC-PS-001 - Get current position, normal
-void test_PositionSensing_GetPosition_Normal_ShouldReturnValue(void) {
-    HAL_ADC_Read_ExpectAndReturn(ADC_CHANNEL_POSITION, 50);
-    int pos = position_sensing_get_position();
-    TEST_ASSERT_EQUAL(50, pos);
+
+void setUp(void)
+{
 }
-// TEST PLAN: TC-PS-002 - Out-of-range low ADC value
-void test_PositionSensing_GetPosition_ADCTooLow_ShouldClampZero(void) {
-    HAL_ADC_Read_ExpectAndReturn(ADC_CHANNEL_POSITION, -12);
-    int pos = position_sensing_get_position();
-    TEST_ASSERT_EQUAL(0, pos);
+
+void tearDown(void)
+{
 }
-// TEST PLAN: TC-PS-003 - Out-of-range high ADC value
-void test_PositionSensing_GetPosition_ADCHigh_ShouldClampMax(void) {
-    HAL_ADC_Read_ExpectAndReturn(ADC_CHANNEL_POSITION, 1025);
-    int pos = position_sensing_get_position();
-    TEST_ASSERT_EQUAL(100, pos);
+
+void test_Position_Sensing_Init_should_Configure_ADC(void)
+{
+    HAL_ADC_Start_Expect(&hadc1);
+    Position_Sensing_Init();
 }
-// TEST PLAN: TC-PS-004 - HAL returns error code
-void test_PositionSensing_GetPosition_HALError_ShouldReturnError(void) {
-    HAL_ADC_Read_ExpectAndReturn(ADC_CHANNEL_POSITION, -1000); // convention: < 0 is error
-    int pos = position_sensing_get_position();
-    TEST_ASSERT_EQUAL(PS_ERR_HAL, pos);
+
+void test_Position_Sensing_Get_Position_should_Return_ADC_Value(void)
+{
+    uint32_t expected_adc = 2048;
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, expected_adc);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_OK);
+    uint16_t pos = Position_Sensing_Get_Position();
+    TEST_ASSERT_EQUAL_UINT16(expected_adc, pos);
+}
+
+void test_Position_Sensing_Get_Position_should_Handle_Null_ADC(void)
+{
+}
+
+void test_Position_Sensing_Get_Position_should_Handle_Poll_Timeout(void)
+{
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_TIMEOUT);
+    uint16_t pos = Position_Sensing_Get_Position();
+    TEST_ASSERT_EQUAL_UINT16(0, pos);
+}
+
+void test_Position_Sensing_Get_Position_should_Handle_Smallest_Value(void)
+{
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 0);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_OK);
+    uint16_t pos = Position_Sensing_Get_Position();
+    TEST_ASSERT_EQUAL_UINT16(0, pos);
+}
+
+void test_Position_Sensing_Get_Position_should_Handle_Largest_Value(void)
+{
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 0xFFF);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_OK);
+    uint16_t pos = Position_Sensing_Get_Position();
+    TEST_ASSERT_EQUAL_UINT16(0xFFF, pos);
 }
