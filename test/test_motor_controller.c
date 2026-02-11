@@ -1,75 +1,41 @@
-/* ===== test_motor_controller.c ===== */
 #include "unity.h"
 #include "motor_controller.h"
 #include "mock_stm32f4xx_hal.h"
 
-void setUp(void)
+void test_MotorController_Start_ShouldEnableMotorAndReturnSuccess(void)
 {
+    HAL_GPIO_WritePin_Expect(MOTOR_GPIO_PORT, MOTOR_GPIO_PIN, GPIO_PIN_SET);
+    HAL_Delay_Expect(5);
+    int result = MotorController_Start();
+    TEST_ASSERT_EQUAL_INT(MOTOR_CONTROLLER_SUCCESS, result);
 }
 
-void tearDown(void)
+void test_MotorController_Stop_ShouldDisableMotorAndReturnSuccess(void)
 {
+    HAL_GPIO_WritePin_Expect(MOTOR_GPIO_PORT, MOTOR_GPIO_PIN, GPIO_PIN_RESET);
+    int result = MotorController_Stop();
+    TEST_ASSERT_EQUAL_INT(MOTOR_CONTROLLER_SUCCESS, result);
 }
 
-/* TC-MC-01: Test MotorController_Init calls correct HAL */
-void test_MotorController_Init_CallsHalGpioInit(void)
+void test_MotorController_SetSpeed_ValidInput_ShouldSetPWMDutyCycle(void)
 {
-    HAL_GPIO_Init_ExpectAnyArgs();
-    MotorController_Init();
+    uint8_t speed = 50;
+    HAL_TIM_PWM_Start_ExpectAnyArgsAndReturn(HAL_OK);
+    int result = MotorController_SetSpeed(speed);
+    TEST_ASSERT_EQUAL_INT(MOTOR_CONTROLLER_SUCCESS, result);
 }
 
-/* TC-MC-02: Test MoveTo with valid position issues correct PWM */
-void test_MotorController_MoveTo_ValidPosition_CallsPwmStart(void)
+void test_MotorController_SetSpeed_InvalidInput_ShouldReturnError(void)
 {
-    uint16_t target = 1500;
-    HAL_TIM_PWM_Start_ExpectAnyArgs();
-    HAL_TIM_PWM_ConfigChannel_ExpectAnyArgsAndReturn(HAL_OK);
-    TEST_ASSERT_EQUAL(MOTOR_OK, MotorController_MoveTo(target));
+    uint8_t speed = 110; // Out-of-bounds
+    int result = MotorController_SetSpeed(speed);
+    TEST_ASSERT_EQUAL_INT(MOTOR_CONTROLLER_ERROR_INVALID_SPEED, result);
 }
 
-/* TC-MC-03: Test MoveTo with boundary position (0) */
-void test_MotorController_MoveTo_ZeroPosition_CallsPwmStart(void)
+void test_MotorController_SetSpeed_ZeroSpeed_ShouldHandleAsStop(void)
 {
-    uint16_t target = 0;
-    HAL_TIM_PWM_Start_ExpectAnyArgs();
-    HAL_TIM_PWM_ConfigChannel_ExpectAnyArgsAndReturn(HAL_OK);
-    TEST_ASSERT_EQUAL(MOTOR_OK, MotorController_MoveTo(target));
-}
-
-/* TC-MC-04: Test MoveTo with maximum position (4095) */
-void test_MotorController_MoveTo_MaxPosition_CallsPwmStart(void)
-{
-    uint16_t target = 4095;
-    HAL_TIM_PWM_Start_ExpectAnyArgs();
-    HAL_TIM_PWM_ConfigChannel_ExpectAnyArgsAndReturn(HAL_OK);
-    TEST_ASSERT_EQUAL(MOTOR_OK, MotorController_MoveTo(target));
-}
-
-/* TC-MC-05: Test MoveTo HAL error handling */
-void test_MotorController_MoveTo_HalConfigFail_ReportsError(void)
-{
-    uint16_t target = 2000;
-    HAL_TIM_PWM_ConfigChannel_ExpectAnyArgsAndReturn(HAL_ERROR);
-    TEST_ASSERT_EQUAL(MOTOR_ERROR, MotorController_MoveTo(target));
-}
-
-/* TC-MC-06: Test Stop issues HAL TIM Stop */
-void test_MotorController_Stop_CallsHalTimStop(void)
-{
-    HAL_TIM_PWM_Stop_ExpectAnyArgs();
-    MotorController_Stop();
-}
-
-/* TC-MC-07: Test MoveTo with position out of range is rejected */
-void test_MotorController_MoveTo_PositionOutOfRange_ReturnsError(void)
-{
-    uint16_t target = 5000; // out of valid range
-    TEST_ASSERT_EQUAL(MOTOR_ERROR, MotorController_MoveTo(target));
-}
-
-/* TC-MC-08: Test MoveTo NULL protection - does not call HAL */
-void test_MotorController_MoveTo_NullProtection(void)
-{
-    // Do not expect HAL calls
-    TEST_ASSERT_EQUAL(MOTOR_ERROR, MotorController_MoveTo(NULL));
+    uint8_t speed = 0;
+    HAL_GPIO_WritePin_Expect(MOTOR_GPIO_PORT, MOTOR_GPIO_PIN, GPIO_PIN_RESET);
+    int result = MotorController_SetSpeed(speed);
+    TEST_ASSERT_EQUAL_INT(MOTOR_CONTROLLER_SUCCESS, result);
 }

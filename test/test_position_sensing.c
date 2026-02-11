@@ -1,69 +1,48 @@
-/* ===== test_position_sensing.c ===== */
 #include "unity.h"
 #include "position_sensing.h"
 #include "mock_stm32f4xx_hal.h"
 
-void setUp(void)
+void test_PositionSensing_Read_ValidChannel_ShouldReturnValue(void)
 {
+    uint16_t expected_adc_value = 1234;
+    HAL_ADC_Start_ExpectAndReturn(&hadc1, HAL_OK);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_OK);
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, expected_adc_value);
+    uint16_t result = 0;
+    int ret = PositionSensing_Read(POSITION_CHANNEL_1, &result);
+    TEST_ASSERT_EQUAL_INT(POSITION_SENSING_SUCCESS, ret);
+    TEST_ASSERT_EQUAL_UINT16(expected_adc_value, result);
 }
 
-void tearDown(void)
+void test_PositionSensing_Read_InvalidChannel_ShouldReturnError(void)
 {
+    uint16_t result = 0;
+    int ret = PositionSensing_Read((PositionChannel_t)99, &result);
+    TEST_ASSERT_EQUAL_INT(POSITION_SENSING_ERROR_INVALID_CHANNEL, ret);
 }
 
-/* TC-PS-01: Test initialization triggers correct ADC configuration */
-void test_PositionSensing_Init_HalAdcInitCalled(void)
+void test_PositionSensing_Read_NullPointer_ShouldReturnError(void)
 {
-    HAL_ADC_Init_ExpectAnyArgsAndReturn(HAL_OK);
-    TEST_ASSERT_EQUAL(POSITION_OK, PositionSensing_Init());
+    int ret = PositionSensing_Read(POSITION_CHANNEL_1, NULL);
+    TEST_ASSERT_EQUAL_INT(POSITION_SENSING_ERROR_NULL, ret);
 }
 
-/* TC-PS-02: Test initialization detects HAL failure */
-void test_PositionSensing_Init_HalAdcFails_ReturnsError(void)
+void test_PositionSensing_Read_ChannelLowerBound_ShouldSucceed(void)
 {
-    HAL_ADC_Init_ExpectAnyArgsAndReturn(HAL_ERROR);
-    TEST_ASSERT_EQUAL(POSITION_ERROR, PositionSensing_Init());
+    uint16_t expected_adc_value = 100;
+    HAL_ADC_Start_ExpectAndReturn(&hadc1, HAL_OK);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_OK);
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, expected_adc_value);
+    uint16_t result = 0;
+    int ret = PositionSensing_Read(POSITION_CHANNEL_0, &result);
+    TEST_ASSERT_EQUAL_INT(POSITION_SENSING_SUCCESS, ret);
+    TEST_ASSERT_EQUAL_UINT16(expected_adc_value, result);
 }
 
-/* TC-PS-03: Test reading position triggers correct ADC start/stop */
-void test_PositionSensing_Read_StartsAndStopsAdcProperly(void)
+void test_PositionSensing_HAL_Error_ShouldReturnError(void)
 {
-    HAL_ADC_Start_ExpectAnyArgsAndReturn(HAL_OK);
-    HAL_ADC_PollForConversion_ExpectAnyArgsAndReturn(HAL_OK);
-    HAL_ADC_GetValue_ExpectAnyArgsAndReturn(789U);
-    HAL_ADC_Stop_ExpectAnyArgsAndReturn(HAL_OK);
-    TEST_ASSERT_EQUAL(789, PositionSensing_Read());
-}
-
-/* TC-PS-04: Test read detects ADC conversion failure */
-void test_PositionSensing_Read_ConversionFails_ReturnsError(void)
-{
-    HAL_ADC_Start_ExpectAnyArgsAndReturn(HAL_OK);
-    HAL_ADC_PollForConversion_ExpectAnyArgsAndReturn(HAL_ERROR);
-    HAL_ADC_Stop_ExpectAnyArgsAndReturn(HAL_OK);
-    TEST_ASSERT_EQUAL(POSITION_ERROR, PositionSensing_Read());
-}
-
-/* TC-PS-05: Test read when ADC start fails */
-void test_PositionSensing_Read_AdcStartFails_ReturnsError(void)
-{
-    HAL_ADC_Start_ExpectAnyArgsAndReturn(HAL_ERROR);
-    TEST_ASSERT_EQUAL(POSITION_ERROR, PositionSensing_Read());
-}
-
-/* TC-PS-06: Test read when ADC stop fails (should still return value) */
-void test_PositionSensing_Read_StopFails_ReturnsValue(void)
-{
-    HAL_ADC_Start_ExpectAnyArgsAndReturn(HAL_OK);
-    HAL_ADC_PollForConversion_ExpectAnyArgsAndReturn(HAL_OK);
-    HAL_ADC_GetValue_ExpectAnyArgsAndReturn(456U);
-    HAL_ADC_Stop_ExpectAnyArgsAndReturn(HAL_ERROR);
-    TEST_ASSERT_EQUAL(456, PositionSensing_Read());
-}
-
-/* TC-PS-07: Test PositionSensing_Read with NULL ADC handle */
-void test_PositionSensing_Read_NullHandle_ReturnsError(void)
-{
-    // Simulates NULL handle (if API supports it)
-    TEST_ASSERT_EQUAL(POSITION_ERROR, PositionSensing_Read_NullHandle());
+    HAL_ADC_Start_ExpectAndReturn(&hadc1, HAL_ERROR);
+    uint16_t result = 0;
+    int ret = PositionSensing_Read(POSITION_CHANNEL_1, &result);
+    TEST_ASSERT_EQUAL_INT(POSITION_SENSING_ERROR_HW, ret);
 }

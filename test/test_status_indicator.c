@@ -1,60 +1,37 @@
-/* ===== test_status_indicator.c ===== */
 #include "unity.h"
 #include "status_indicator.h"
 #include "mock_stm32f4xx_hal.h"
 
-void setUp(void)
+void test_StatusIndicator_Set_LED_ON_ShouldSetGPIOPin(void)
 {
+    HAL_GPIO_WritePin_Expect(LED_GPIO_PORT, LED_GPIO_PIN, GPIO_PIN_SET);
+    int result = StatusIndicator_Set(STATUS_INDICATOR_ON);
+    TEST_ASSERT_EQUAL_INT(STATUS_INDICATOR_SUCCESS, result);
 }
 
-void tearDown(void)
+void test_StatusIndicator_Set_LED_OFF_ShouldResetGPIOPin(void)
 {
+    HAL_GPIO_WritePin_Expect(LED_GPIO_PORT, LED_GPIO_PIN, GPIO_PIN_RESET);
+    int result = StatusIndicator_Set(STATUS_INDICATOR_OFF);
+    TEST_ASSERT_EQUAL_INT(STATUS_INDICATOR_SUCCESS, result);
 }
 
-/* TC-SI-01: Test StatusIndicator_Init calls HAL GPIO config */
-void test_StatusIndicator_Init_HalGpioInitCalled(void)
+void test_StatusIndicator_Set_InvalidState_ShouldReturnError(void)
 {
-    HAL_GPIO_Init_ExpectAnyArgs();
-    StatusIndicator_Init();
+    int result = StatusIndicator_Set((StatusIndicatorState_t)99);
+    TEST_ASSERT_EQUAL_INT(STATUS_INDICATOR_ERROR_INVALID_STATE, result);
 }
 
-/* TC-SI-02: Test StatusIndicator_Set calls HAL_GPIO_WritePin for ON */
-void test_StatusIndicator_Set_On_CallsHalGpioWriteHigh(void)
+void test_StatusIndicator_Toggle_On_ShouldTurnOff(void)
 {
-    HAL_GPIO_WritePin_ExpectAnyArgs();
-    StatusIndicator_Set(STATUS_ON);
+    HAL_GPIO_TogglePin_Expect(LED_GPIO_PORT);
+    StatusIndicatorState_t initial = STATUS_INDICATOR_ON;
+    int result = StatusIndicator_Toggle(&initial);
+    TEST_ASSERT_EQUAL_INT(STATUS_INDICATOR_SUCCESS, result);
 }
 
-/* TC-SI-03: Test StatusIndicator_Set calls HAL_GPIO_WritePin for OFF */
-void test_StatusIndicator_Set_Off_CallsHalGpioWriteLow(void)
+void test_StatusIndicator_Toggle_NullPointer_ShouldReturnError(void)
 {
-    HAL_GPIO_WritePin_ExpectAnyArgs();
-    StatusIndicator_Set(STATUS_OFF);
-}
-
-/* TC-SI-04: Test StatusIndicator_Blink blinks LED through HAL */
-void test_StatusIndicator_Blink_CallsHalGpioSequence(void)
-{
-    HAL_GPIO_WritePin_ExpectAnyArgs(); // ON
-    HAL_Delay_ExpectAnyArgs();
-    HAL_GPIO_WritePin_ExpectAnyArgs(); // OFF
-    HAL_Delay_ExpectAnyArgs();
-    StatusIndicator_Blink();
-}
-
-/* TC-SI-05: Test StatusIndicator_Set ignores invalid argument */
-void test_StatusIndicator_Set_InvalidArgument_NoAction(void)
-{
-    // Should not call HAL
-    StatusIndicator_Set(99); // Unknown state
-}
-
-/* TC-SI-06: Test StatusIndicator_Blink handles HAL failures gracefully */
-void test_StatusIndicator_Blink_HalError_Ignored(void)
-{
-    HAL_GPIO_WritePin_ExpectAnyArgs();
-    HAL_Delay_ExpectAnyArgsAndReturn(HAL_ERROR);
-    HAL_GPIO_WritePin_ExpectAnyArgs();
-    HAL_Delay_ExpectAnyArgsAndReturn(HAL_ERROR);
-    StatusIndicator_Blink();
+    int result = StatusIndicator_Toggle(NULL);
+    TEST_ASSERT_EQUAL_INT(STATUS_INDICATOR_ERROR_NULL, result);
 }
