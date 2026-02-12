@@ -1,68 +1,80 @@
 #include "unity.h"
 #include "motor_controller.h"
-#include "mock_stm32f4xx_hal.h"
+#include "mock_hal.h"
 
 void setUp(void)
 {
+    mock_hal_Init();
 }
 
 void tearDown(void)
 {
+    mock_hal_Verify();
+    mock_hal_Destroy();
 }
 
-/* TC_MC_001: Test MoveForward calls correct HAL function */
-void test_MotorController_MoveForward_Sets_Pin_And_Returns_MOTOR_OK(void)
+// Test ID: TC_MC_001
+void test_MotorController_Init_ShouldCallHALInit(void)
 {
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
-    MotorStatus_t result = MotorController_MoveForward();
-    TEST_ASSERT_EQUAL(MOTOR_OK, result);
+    HAL_MotorInit_Expect();
+
+    MotorController_Init();
 }
 
-/* TC_MC_002: Test MoveBackward calls correct HAL function */
-void test_MotorController_MoveBackward_Sets_Pin_And_Returns_MOTOR_OK(void)
+// Test ID: TC_MC_002
+void test_MotorController_SetSpeed_ShouldSetValidSpeed(void)
 {
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
-    MotorStatus_t result = MotorController_MoveBackward();
-    TEST_ASSERT_EQUAL(MOTOR_OK, result);
+    int speed = 100;
+    HAL_SetMotorSpeed_ExpectAndReturn(speed, HAL_OK);
+
+    int result = MotorController_SetSpeed(speed);
+
+    TEST_ASSERT_EQUAL(0, result);
 }
 
-/* TC_MC_003: Test Stop disables both pins */
-void test_MotorController_Stop_Sets_Both_Pins_Low_And_Returns_MOTOR_OK(void)
+// Test ID: TC_MC_003
+void test_MotorController_SetSpeed_ShouldRejectNegativeSpeed(void)
 {
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
-    MotorStatus_t result = MotorController_Stop();
-    TEST_ASSERT_EQUAL(MOTOR_OK, result);
+    int result = MotorController_SetSpeed(-10);
+
+    TEST_ASSERT_EQUAL(-1, result);
 }
 
-/* TC_MC_004: MoveForward returns MOTOR_ERROR if HAL fails */
-void test_MotorController_MoveForward_HAL_Failure_Returns_MOTOR_ERROR(void)
+// Test ID: TC_MC_004
+void test_MotorController_SetSpeed_ShouldRejectSpeedAboveMax(void)
 {
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_0, GPIO_PIN_SET);
-    MotorStatus_t result = MotorController_MoveForward();
-    TEST_ASSERT_EQUAL(MOTOR_OK, result);
+    int result = MotorController_SetSpeed(1001);
+
+    TEST_ASSERT_EQUAL(-2, result);
 }
 
-/* TC_MC_005: MoveBackward returns MOTOR_ERROR if HAL fails */
-void test_MotorController_MoveBackward_HAL_Failure_Returns_MOTOR_ERROR(void)
+// Test ID: TC_MC_005
+void test_MotorController_SetSpeed_ShouldReturnErrorOnHALFailure(void)
 {
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
-    MotorStatus_t result = MotorController_MoveBackward();
-    TEST_ASSERT_EQUAL(MOTOR_OK, result);
+    int speed = 300;
+    HAL_SetMotorSpeed_ExpectAndReturn(speed, HAL_ERROR);
+
+    int result = MotorController_SetSpeed(speed);
+
+    TEST_ASSERT_EQUAL(-3, result);
 }
 
-/* TC_MC_006: Stop handles stop multiple times safely */
-void test_MotorController_Stop_Called_Twice(void)
+// Test ID: TC_MC_006
+void test_MotorController_Stop_ShouldStopMotor(void)
 {
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
-    MotorController_Stop();
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_0, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
-    MotorController_Stop();
+    HAL_StopMotor_ExpectAndReturn(HAL_OK);
+
+    int result = MotorController_Stop();
+
+    TEST_ASSERT_EQUAL(0, result);
 }
 
-/* TC_MC_007: Test NULL or invalid arguments for all public functions */
-void test_MotorController_Null_Safety_NoEffect(void)
+// Test ID: TC_MC_007
+void test_MotorController_Stop_ShouldHandleHALFailure(void)
 {
+    HAL_StopMotor_ExpectAndReturn(HAL_ERROR);
+
+    int result = MotorController_Stop();
+
+    TEST_ASSERT_EQUAL(-1, result);
 }
