@@ -1,6 +1,6 @@
 #include "unity.h"
 #include "command_handler.h"
-#include "mock_hal.h"  // Replace 'hal' with the actual HAL dependency name if different
+#include "mock_hal.h"  // Replace 'hal' with the actual HAL dependency name if  it is different
 #include <string.h>
 
 void setUp(void)
