@@ -2,47 +2,50 @@
 #include "position_sensing.h"
 #include "mock_stm32f4xx_hal.h"
 
-void test_PositionSensing_Read_ValidChannel_ShouldReturnValue(void)
+void setUp(void)
 {
-    uint16_t expected_adc_value = 1234;
-    HAL_ADC_Start_ExpectAndReturn(&hadc1, HAL_OK);
+}
+
+void tearDown(void)
+{
+}
+
+/* TC_PS_001: Get should read ADC and return position value */
+void test_PositionSensing_Get_Reads_ADC_And_Returns_Value(void)
+{
+    uint32_t adc_value = 1234;
     HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_OK);
-    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, expected_adc_value);
-    uint16_t result = 0;
-    int ret = PositionSensing_Read(POSITION_CHANNEL_1, &result);
-    TEST_ASSERT_EQUAL_INT(POSITION_SENSING_SUCCESS, ret);
-    TEST_ASSERT_EQUAL_UINT16(expected_adc_value, result);
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, adc_value);
+    int result = PositionSensing_Get();
+    TEST_ASSERT_EQUAL(adc_value, result);
 }
 
-void test_PositionSensing_Read_InvalidChannel_ShouldReturnError(void)
+/* TC_PS_002: Get returns 0 if ADC poll times out or fails */
+void test_PositionSensing_Get_ADCPoll_Fails_Returns_Zero(void)
 {
-    uint16_t result = 0;
-    int ret = PositionSensing_Read((PositionChannel_t)99, &result);
-    TEST_ASSERT_EQUAL_INT(POSITION_SENSING_ERROR_INVALID_CHANNEL, ret);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_TIMEOUT);
+    int result = PositionSensing_Get();
+    TEST_ASSERT_EQUAL(0, result);
 }
 
-void test_PositionSensing_Read_NullPointer_ShouldReturnError(void)
+/* TC_PS_003: Get returns 0 if HAL_ADC_GetValue returns 0 */
+void test_PositionSensing_Get_ADC_Returns_Zero_Value(void)
 {
-    int ret = PositionSensing_Read(POSITION_CHANNEL_1, NULL);
-    TEST_ASSERT_EQUAL_INT(POSITION_SENSING_ERROR_NULL, ret);
-}
-
-void test_PositionSensing_Read_ChannelLowerBound_ShouldSucceed(void)
-{
-    uint16_t expected_adc_value = 100;
-    HAL_ADC_Start_ExpectAndReturn(&hadc1, HAL_OK);
     HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_OK);
-    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, expected_adc_value);
-    uint16_t result = 0;
-    int ret = PositionSensing_Read(POSITION_CHANNEL_0, &result);
-    TEST_ASSERT_EQUAL_INT(POSITION_SENSING_SUCCESS, ret);
-    TEST_ASSERT_EQUAL_UINT16(expected_adc_value, result);
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 0);
+    int result = PositionSensing_Get();
+    TEST_ASSERT_EQUAL(0, result);
 }
 
-void test_PositionSensing_HAL_Error_ShouldReturnError(void)
+/* TC_PS_004: Multiple PositionSensing_Get calls return different values */
+void test_PositionSensing_Get_Called_Twice_Yields_Different_Results(void)
 {
-    HAL_ADC_Start_ExpectAndReturn(&hadc1, HAL_ERROR);
-    uint16_t result = 0;
-    int ret = PositionSensing_Read(POSITION_CHANNEL_1, &result);
-    TEST_ASSERT_EQUAL_INT(POSITION_SENSING_ERROR_HW, ret);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_OK);
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 321);
+    int v1 = PositionSensing_Get();
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_OK);
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 2222);
+    int v2 = PositionSensing_Get();
+    TEST_ASSERT_EQUAL(321, v1);
+    TEST_ASSERT_EQUAL(2222, v2);
 }

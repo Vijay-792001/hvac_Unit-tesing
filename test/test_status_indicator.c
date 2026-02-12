@@ -2,36 +2,51 @@
 #include "status_indicator.h"
 #include "mock_stm32f4xx_hal.h"
 
-void test_StatusIndicator_Set_LED_ON_ShouldSetGPIOPin(void)
+void setUp(void)
 {
-    HAL_GPIO_WritePin_Expect(LED_GPIO_PORT, LED_GPIO_PIN, GPIO_PIN_SET);
-    int result = StatusIndicator_Set(STATUS_INDICATOR_ON);
-    TEST_ASSERT_EQUAL_INT(STATUS_INDICATOR_SUCCESS, result);
 }
 
-void test_StatusIndicator_Set_LED_OFF_ShouldResetGPIOPin(void)
+void tearDown(void)
 {
-    HAL_GPIO_WritePin_Expect(LED_GPIO_PORT, LED_GPIO_PIN, GPIO_PIN_RESET);
-    int result = StatusIndicator_Set(STATUS_INDICATOR_OFF);
-    TEST_ASSERT_EQUAL_INT(STATUS_INDICATOR_SUCCESS, result);
 }
 
-void test_StatusIndicator_Set_InvalidState_ShouldReturnError(void)
+/* TC_SI_001: Set OK status should set LED pin high */
+void test_StatusIndicator_Set_OK_Sets_LED_Pin_High(void)
 {
-    int result = StatusIndicator_Set((StatusIndicatorState_t)99);
-    TEST_ASSERT_EQUAL_INT(STATUS_INDICATOR_ERROR_INVALID_STATE, result);
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_SET);
+    StatusIndicator_Set(STATUS_OK);
 }
 
-void test_StatusIndicator_Toggle_On_ShouldTurnOff(void)
+/* TC_SI_002: Set ERROR status should set LED pin low */
+void test_StatusIndicator_Set_ERROR_Sets_LED_Pin_Low(void)
 {
-    HAL_GPIO_TogglePin_Expect(LED_GPIO_PORT);
-    StatusIndicatorState_t initial = STATUS_INDICATOR_ON;
-    int result = StatusIndicator_Toggle(&initial);
-    TEST_ASSERT_EQUAL_INT(STATUS_INDICATOR_SUCCESS, result);
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
+    StatusIndicator_Set(STATUS_ERROR);
 }
 
-void test_StatusIndicator_Toggle_NullPointer_ShouldReturnError(void)
+/* TC_SI_003: Get returns the last set status */
+void test_StatusIndicator_Get_Returns_Last_Status(void)
 {
-    int result = StatusIndicator_Toggle(NULL);
-    TEST_ASSERT_EQUAL_INT(STATUS_INDICATOR_ERROR_NULL, result);
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_SET);
+    StatusIndicator_Set(STATUS_OK);
+    Status_t st = StatusIndicator_Get();
+    TEST_ASSERT_EQUAL(STATUS_OK, st);
+
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
+    StatusIndicator_Set(STATUS_ERROR);
+    st = StatusIndicator_Get();
+    TEST_ASSERT_EQUAL(STATUS_ERROR, st);
+}
+
+/* TC_SI_004: Set with invalid status input handles gracefully */
+void test_StatusIndicator_Set_Invalid_Status_Does_Nothing(void)
+{
+    StatusIndicator_Set(12345);
+}
+
+/* TC_SI_005: StatusIndicator_Get returns default on startup */
+void test_StatusIndicator_Get_Returns_Default_On_Startup(void)
+{
+    Status_t st = StatusIndicator_Get();
+    TEST_ASSERT_EQUAL(STATUS_OK, st);
 }
