@@ -1,79 +1,62 @@
 #include "unity.h"
 #include "command_handler.h"
-#include "mock_hal.h"  // Replace 'hal' with the actual HAL dependency name if  it is different
-#include <string.h>
+#include "mock_motor_controller.h"
+#include "mock_status_indicator.h"
+#include "mock_position_sensing.h"
+#include "mock_stm32f4xx_hal.h"
 
 void setUp(void)
 {
-    mock_hal_Init();
+    // This is run before EACH TEST
 }
 
 void tearDown(void)
 {
-    mock_hal_Verify();
-    mock_hal_Destroy();
+    // This is run after EACH TEST
 }
 
-// Test ID: TC_CH_001
-void test_CommandHandler_Init_ShouldInitializeAllInternalState(void)
+void test_CommandHandler_ValidCommand_ExecutesMotorAndStatusIndicator(void)
 {
-    // Arrange
-    HAL_Init_Expect();
-
-    // Act
-    CommandHandler_Init();
-
-    // Assert
-    // No explicit outputs; all verification is through mock expectations.
+    Command_t valid_cmd = CMD_MOVE_UP;
+    MotorController_Move_ExpectAndReturn(valid_cmd, MOTOR_OK);
+    StatusIndicator_Update_Expect(STATUS_BUSY);
+    CommandHandler_Dispatch(&valid_cmd);
 }
 
-// Test ID: TC_CH_002
-void test_CommandHandler_ProcessCommand_ShouldHandleValidCommand(void)
+void test_CommandHandler_InvalidCommand_TriggersErrorStatus(void)
 {
-    // Arrange
-    const char* valid_cmd = "SET_TEMP 22";
-    HAL_SendCommand_ExpectAndReturn(valid_cmd, HAL_OK);
-
-    // Act
-    int result = CommandHandler_ProcessCommand(valid_cmd);
-
-    // Assert
-    TEST_ASSERT_EQUAL(0, result);
+    Command_t invalid_cmd = CMD_INVALID;
+    StatusIndicator_Update_Expect(STATUS_ERROR);
+    CommandHandler_Dispatch(&invalid_cmd);
 }
 
-// Test ID: TC_CH_003
-void test_CommandHandler_ProcessCommand_ShouldRejectNullCommand(void)
+void test_CommandHandler_NullPointerCommand_SafeNoAction(void)
 {
-    // Act
-    int result = CommandHandler_ProcessCommand(NULL);
-
-    // Assert
-    TEST_ASSERT_EQUAL(-1, result);
+    CommandHandler_Dispatch(NULL);
 }
 
-// Test ID: TC_CH_004
-void test_CommandHandler_ProcessCommand_ShouldRejectUnsupportedCommand(void)
+void test_CommandHandler_MotorControllerFails_TriggersErrorStatus(void)
 {
-    // Arrange
-    const char* invalid_cmd = "INVALID_CMD";
-
-    // Act
-    int result = CommandHandler_ProcessCommand(invalid_cmd);
-
-    // Assert
-    TEST_ASSERT_EQUAL(-2, result);
+    Command_t cmd = CMD_MOVE_DOWN;
+    MotorController_Move_ExpectAndReturn(cmd, MOTOR_ERR);
+    StatusIndicator_Update_Expect(STATUS_ERROR);
+    CommandHandler_Dispatch(&cmd);
 }
 
-// Test ID: TC_CH_005
-void test_CommandHandler_ProcessCommand_ShouldHandleHALFailure(void)
+void test_CommandHandler_ValidCommand_SetsIdleAfterCompletion(void)
 {
-    // Arrange
-    const char* valid_cmd = "SET_TEMP 22";
-    HAL_SendCommand_ExpectAndReturn(valid_cmd, HAL_ERROR);
+    Command_t cmd = CMD_MOVE_HOME;
+    MotorController_Move_ExpectAndReturn(cmd, MOTOR_OK);
+    StatusIndicator_Update_Expect(STATUS_BUSY);
+    StatusIndicator_Update_Expect(STATUS_IDLE);
+    CommandHandler_Dispatch(&cmd);
+}
 
-    // Act
-    int result = CommandHandler_ProcessCommand(valid_cmd);
-
-    // Assert
-    TEST_ASSERT_EQUAL(-3, result);
+void test_CommandHandler_PositionRequest_InvokesPositionSensing(void)
+{
+    Command_t cmd = CMD_GET_POSITION;
+    int fake_position = 42;
+    PositionSensing_Get_ExpectAndReturn(0, fake_position);
+    StatusIndicator_Update_Expect(STATUS_POS_REPORTED);
+    CommandHandler_Dispatch(&cmd);
 }

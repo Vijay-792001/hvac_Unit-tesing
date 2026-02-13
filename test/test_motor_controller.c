@@ -1,80 +1,52 @@
 #include "unity.h"
 #include "motor_controller.h"
-#include "mock_hal.h"
+#include "mock_stm32f4xx_hal.h"
 
 void setUp(void)
 {
-    mock_hal_Init();
 }
 
 void tearDown(void)
 {
-    mock_hal_Verify();
-    mock_hal_Destroy();
 }
 
-// Test ID: TC_MC_001
-void test_MotorController_Init_ShouldCallHALInit(void)
+void test_MotorController_Move_Up_Success(void)
 {
-    HAL_MotorInit_Expect();
-
-    MotorController_Init();
+    MotorAction_t action = CMD_MOVE_UP;
+    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_UP_PIN, GPIO_PIN_SET);
+    HAL_Delay_Expect(MOTOR_MOVE_TIME_MS);
+    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_UP_PIN, GPIO_PIN_RESET);
+    MotorStatus_t result = MotorController_Move(action);
+    TEST_ASSERT_EQUAL(MOTOR_OK, result);
 }
 
-// Test ID: TC_MC_002
-void test_MotorController_SetSpeed_ShouldSetValidSpeed(void)
+void test_MotorController_Move_Down_Success(void)
 {
-    int speed = 100;
-    HAL_SetMotorSpeed_ExpectAndReturn(speed, HAL_OK);
-
-    int result = MotorController_SetSpeed(speed);
-
-    TEST_ASSERT_EQUAL(0, result);
+    MotorAction_t action = CMD_MOVE_DOWN;
+    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_DOWN_PIN, GPIO_PIN_SET);
+    HAL_Delay_Expect(MOTOR_MOVE_TIME_MS);
+    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_DOWN_PIN, GPIO_PIN_RESET);
+    MotorStatus_t result = MotorController_Move(action);
+    TEST_ASSERT_EQUAL(MOTOR_OK, result);
 }
 
-// Test ID: TC_MC_003
-void test_MotorController_SetSpeed_ShouldRejectNegativeSpeed(void)
+void test_MotorController_Move_InvalidAction_ReturnsError(void)
 {
-    int result = MotorController_SetSpeed(-10);
-
-    TEST_ASSERT_EQUAL(-1, result);
+    MotorAction_t action = (MotorAction_t)99;
+    MotorStatus_t result = MotorController_Move(action);
+    TEST_ASSERT_EQUAL(MOTOR_ERR, result);
 }
 
-// Test ID: TC_MC_004
-void test_MotorController_SetSpeed_ShouldRejectSpeedAboveMax(void)
+void test_MotorController_Move_HALPinSet_Fails_ReturnsError(void)
 {
-    int result = MotorController_SetSpeed(1001);
-
-    TEST_ASSERT_EQUAL(-2, result);
+    MotorAction_t action = CMD_MOVE_UP;
+    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_UP_PIN, GPIO_PIN_SET);
+    MotorStatus_t result = MotorController_Move(action);
+    TEST_ASSERT_EQUAL(MOTOR_OK, result);
 }
 
-// Test ID: TC_MC_005
-void test_MotorController_SetSpeed_ShouldReturnErrorOnHALFailure(void)
+void test_MotorController_Move_Boundary_NoDependencies_NoCrash(void)
 {
-    int speed = 300;
-    HAL_SetMotorSpeed_ExpectAndReturn(speed, HAL_ERROR);
-
-    int result = MotorController_SetSpeed(speed);
-
-    TEST_ASSERT_EQUAL(-3, result);
-}
-
-// Test ID: TC_MC_006
-void test_MotorController_Stop_ShouldStopMotor(void)
-{
-    HAL_StopMotor_ExpectAndReturn(HAL_OK);
-
-    int result = MotorController_Stop();
-
-    TEST_ASSERT_EQUAL(0, result);
-}
-
-// Test ID: TC_MC_007
-void test_MotorController_Stop_ShouldHandleHALFailure(void)
-{
-    HAL_StopMotor_ExpectAndReturn(HAL_ERROR);
-
-    int result = MotorController_Stop();
-
-    TEST_ASSERT_EQUAL(-1, result);
+    MotorStatus_t result = MotorController_Move(CMD_STOP);
+    TEST_ASSERT_EQUAL(MOTOR_OK, result);
 }

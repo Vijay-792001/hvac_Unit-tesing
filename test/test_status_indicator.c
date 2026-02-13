@@ -1,69 +1,41 @@
 #include "unity.h"
 #include "status_indicator.h"
-#include "mock_hal.h"
+#include "mock_stm32f4xx_hal.h"
 
 void setUp(void)
 {
-    mock_hal_Init();
 }
 
 void tearDown(void)
 {
-    mock_hal_Verify();
-    mock_hal_Destroy();
 }
 
-// Test ID: TC_SI_001
-void test_StatusIndicator_Init_ShouldInitLEDandBuzzer(void)
+void test_StatusIndicator_Update_SetIdle_LightsProperLED(void)
 {
-    HAL_LEDInit_Expect();
-    HAL_BuzzerInit_Expect();
-
-    StatusIndicator_Init();
+    HAL_GPIO_WritePin_Expect(LED_PORT, LED_GREEN_PIN, GPIO_PIN_SET);
+    HAL_GPIO_WritePin_Expect(LED_PORT, LED_YELLOW_PIN, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(LED_PORT, LED_RED_PIN, GPIO_PIN_RESET);
+    StatusIndicator_Update(STATUS_IDLE);
 }
 
-// Test ID: TC_SI_002
-void test_StatusIndicator_SetLED_ShouldTurnOnLEDOnValidCall(void)
+void test_StatusIndicator_Update_SetBusy_LightsProperLED(void)
 {
-    HAL_SetLED_ExpectAndReturn(HAL_LED_ON, HAL_OK);
-
-    int result = StatusIndicator_SetLED(HAL_LED_ON);
-
-    TEST_ASSERT_EQUAL(0, result);
+    HAL_GPIO_WritePin_Expect(LED_PORT, LED_GREEN_PIN, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(LED_PORT, LED_YELLOW_PIN, GPIO_PIN_SET);
+    HAL_GPIO_WritePin_Expect(LED_PORT, LED_RED_PIN, GPIO_PIN_RESET);
+    StatusIndicator_Update(STATUS_BUSY);
 }
 
-// Test ID: TC_SI_003
-void test_StatusIndicator_SetLED_ShouldHandleInvalidState(void)
+void test_StatusIndicator_Update_SetError_LightsProperLED(void)
 {
-    int result = StatusIndicator_SetLED(42);
-
-    TEST_ASSERT_EQUAL(-1, result);
+    HAL_GPIO_WritePin_Expect(LED_PORT, LED_GREEN_PIN, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(LED_PORT, LED_YELLOW_PIN, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(LED_PORT, LED_RED_PIN, GPIO_PIN_SET);
+    StatusIndicator_Update(STATUS_ERROR);
 }
 
-// Test ID: TC_SI_004
-void test_StatusIndicator_SetLED_ShouldReturnErrorOnHALFailure(void)
+void test_StatusIndicator_Update_BadState_LightsNone(void)
 {
-    HAL_SetLED_ExpectAndReturn(HAL_LED_OFF, HAL_ERROR);
-
-    int result = StatusIndicator_SetLED(HAL_LED_OFF);
-
-    TEST_ASSERT_EQUAL(-2, result);
-}
-
-// Test ID: TC_SI_005
-void test_StatusIndicator_Beep_ShouldBeepOnce(void)
-{
-    HAL_BuzzerBeep_ExpectAndReturn(HAL_BUZZER_BEEP_ONCE, HAL_OK);
-
-    int result = StatusIndicator_Beep(HAL_BUZZER_BEEP_ONCE);
-
-    TEST_ASSERT_EQUAL(0, result);
-}
-
-// Test ID: TC_SI_006
-void test_StatusIndicator_Beep_ShouldRejectInvalidType(void)
-{
-    int result = StatusIndicator_Beep(99);
-
-    TEST_ASSERT_EQUAL(-1, result);
+    Status_t bad_status = (Status_t)99;
+    StatusIndicator_Update(bad_status);
 }
