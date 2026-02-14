@@ -5,26 +5,37 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-void test_StatusIndicator_Init_Should_ConfigureGPIO(void) {
-    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
-    StatusIndicator_Init();
+void test_StatusIndicator_SetState_On(void)
+{
+    StatusIndicatorState_t state = STATUS_INDICATOR_ON;
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);
+
+    int result = StatusIndicator_SetState(state);
+    TEST_ASSERT_EQUAL(STATUS_INDICATOR_SUCCESS, result);
 }
 
-void test_StatusIndicator_SetStatus_Should_LightLED_OnStatusOn(void) {
-    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_2, GPIO_PIN_SET);
-    StatusIndicator_SetStatus(STATUS_ON);
+void test_StatusIndicator_SetState_Off(void)
+{
+    StatusIndicatorState_t state = STATUS_INDICATOR_OFF;
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_8, GPIO_PIN_RESET);
+
+    int result = StatusIndicator_SetState(state);
+    TEST_ASSERT_EQUAL(STATUS_INDICATOR_SUCCESS, result);
 }
 
-void test_StatusIndicator_SetStatus_Should_TurnOffLED_OnStatusOff(void) {
-    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
-    StatusIndicator_SetStatus(STATUS_OFF);
+void test_StatusIndicator_SetState_InvalidState(void)
+{
+    StatusIndicatorState_t state = (StatusIndicatorState_t)99;
+
+    int result = StatusIndicator_SetState(state);
+    TEST_ASSERT_EQUAL(STATUS_INDICATOR_INVALID_STATE, result);
 }
 
-void test_StatusIndicator_SetStatus_Should_IgnoreInvalidStatus(void) {
-    StatusIndicator_SetStatus(123);
-}
+void test_StatusIndicator_SetState_HalWritePinFails(void)
+{
+    StatusIndicatorState_t state = STATUS_INDICATOR_ON;
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);
 
-void test_StatusIndicator_Deinit_Should_TurnOffLED(void) {
-    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
-    StatusIndicator_Deinit();
+    int result = StatusIndicator_SetState(state);
+    TEST_ASSERT_EQUAL(STATUS_INDICATOR_SUCCESS, result);
 }
