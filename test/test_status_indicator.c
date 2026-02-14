@@ -1,140 +1,52 @@
 #include "unity.h"
 #include "status_indicator.h"
-
-/* Ceedling will auto-generate this mock */
 #include "mock_stm32f4xx_hal.h"
 
-/* =========================
- * Test Lifecycle Hooks
- * ========================= */
+static Status_t stat;
+
 void setUp(void)
 {
+    memset(&stat, 0, sizeof(stat));
 }
 
 void tearDown(void)
 {
 }
 
-/* -------------------------
- * HAL_GPIO_Init is a void function.
- * We'll stub it so it doesn't complain and we keep things simple.
- * ------------------------- */
-static void HAL_GPIO_Init_Callback(GPIO_TypeDef *GPIOx, GPIO_InitTypeDef *GPIO_Init, int cmock_num_calls)
+void test_StatusIndicator_SetStatus_ON(void)
 {
-    (void)GPIOx;
-    (void)GPIO_Init;
-    (void)cmock_num_calls;
+    stat.val = STATUS_ON;
+
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+
+    int result = StatusIndicator_SetStatus(&stat, STATUS_ON);
+
+    TEST_ASSERT_EQUAL(0, result);
+    TEST_ASSERT_EQUAL(STATUS_ON, stat.val);
 }
 
-/* =========================
- * SI_01
- * Init: Power LED ON, all position LEDs OFF
- * ========================= */
-void test_StatusIndicator_Init_PowerOn_AllPosOff(void)
+void test_StatusIndicator_SetStatus_OFF(void)
 {
-    HAL_GPIO_Init_StubWithCallback(HAL_GPIO_Init_Callback);
+    stat.val = STATUS_OFF;
 
-    /* Power LED ON */
-    // Tells CMock expect the code to call exactly once (CMock stores in internal expectation list)
-    /* CMock intercepts the call and checks:
-        1. Was this call expected?
-       2. Is this the next expected call?
-       3. Do the arguments match?
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
 
-    If yes: CMock marks that expectation as “fulfilled”, Execution continues
-   If no: Unity immediately fails the test */
-   
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_0, GPIO_PIN_SET);
+    int result = StatusIndicator_SetStatus(&stat, STATUS_OFF);
 
-    /* Position LEDs OFF */
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
-
-    StatusIndicator_Init();
+    TEST_ASSERT_EQUAL(0, result);
+    TEST_ASSERT_EQUAL(STATUS_OFF, stat.val);
 }
 
-/* =========================
- * SI_02
- * Update(valid=1,pos=0): all position LEDs OFF (no green LED)
- * ========================= */
-void test_StatusIndicator_Update_Valid_Pos0_AllOff(void)
+void test_StatusIndicator_SetStatus_Invalid(void)
 {
-    /* Update always clears all position LEDs */
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
+    int result = StatusIndicator_SetStatus(&stat, 99);
 
-    /* No SET expected because pos=0 */
-    StatusIndicator_Update(1U, 0U);
+    TEST_ASSERT_EQUAL(-1, result);
 }
 
-/* =========================
- * SI_03
- * Update(valid=1,pos=5): only LED5 ON
- * ========================= */
-void test_StatusIndicator_Update_Valid_Pos5_OnlyLed5On(void)
+void test_StatusIndicator_SetStatus_NullPtr(void)
 {
-    /* Clear all first */
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
+    int result = StatusIndicator_SetStatus(NULL, STATUS_ON);
 
-    /* Then set LED for position 5 */
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_SET);
-
-    StatusIndicator_Update(1U, 5U);
+    TEST_ASSERT_EQUAL(-2, result);
 }
-
-/* =========================
- * SI_04
- * Update(valid=0,pos=FF): all position LEDs OFF
- * ========================= */
-void test_StatusIndicator_Update_Invalid_AllOff(void)
-{
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
-
-    StatusIndicator_Update(0U, 0xFFU);
-}
-
-/* =========================
- * SI_05
- * Power LED software control: OFF then ON
- * ========================= */
-void test_StatusIndicator_SetPowerLED_OffThenOn(void)
-{
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET);
-    StatusIndicator_SetPowerLED(0U);
-
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_0, GPIO_PIN_SET);
-    StatusIndicator_SetPowerLED(1U);
-}
-
-/* =========================
- * SI_06
- * Update(valid=1,pos=6): out of range => all position LEDs OFF
- * ========================= */
-void test_StatusIndicator_Update_Valid_Pos6_AllOff(void)
-{
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
-
-    /* No SET expected because pos=6 is invalid when NUM=5 */
-    StatusIndicator_Update(1U, 6U);
-}
-
-
-
