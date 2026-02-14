@@ -2,51 +2,59 @@
 #include "motor_controller.h"
 #include "mock_stm32f4xx_hal.h"
 
-void setUp(void)
+void setUp(void) {}
+void tearDown(void) {}
+
+void test_MotorController_Move_Nominal(void)
 {
+    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_PIN_1, GPIO_PIN_SET);
+    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_PIN_2, GPIO_PIN_RESET);
+
+    int result = MotorController_Move(100);
+
+    TEST_ASSERT_EQUAL(0, result);
 }
 
-void tearDown(void)
+void test_MotorController_Move_Negative_Position(void)
 {
+    int result = MotorController_Move(-1);
+
+    TEST_ASSERT_EQUAL(-1, result);
 }
 
-void test_MotorController_Move_Up_Success(void)
+void test_MotorController_Move_Too_High(void)
 {
-    MotorAction_t action = CMD_MOVE_UP;
-    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_UP_PIN, GPIO_PIN_SET);
-    HAL_Delay_Expect(MOTOR_MOVE_TIME_MS);
-    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_UP_PIN, GPIO_PIN_RESET);
-    MotorStatus_t result = MotorController_Move(action);
-    TEST_ASSERT_EQUAL(MOTOR_OK, result);
+    int result = MotorController_Move(MOTOR_MAX_POSITION + 1);
+
+    TEST_ASSERT_EQUAL(-1, result);
 }
 
-void test_MotorController_Move_Down_Success(void)
+void test_MotorController_Move_HAL_GPIO_Failure(void)
 {
-    MotorAction_t action = CMD_MOVE_DOWN;
-    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_DOWN_PIN, GPIO_PIN_SET);
-    HAL_Delay_Expect(MOTOR_MOVE_TIME_MS);
-    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_DOWN_PIN, GPIO_PIN_RESET);
-    MotorStatus_t result = MotorController_Move(action);
-    TEST_ASSERT_EQUAL(MOTOR_OK, result);
+    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_PIN_1, GPIO_PIN_SET);
+    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_PIN_2, GPIO_PIN_RESET);
+
+    int result = MotorController_Move(10);
+
+    TEST_ASSERT_EQUAL(0, result);
 }
 
-void test_MotorController_Move_InvalidAction_ReturnsError(void)
+void test_MotorController_Move_Zero_Position(void)
 {
-    MotorAction_t action = (MotorAction_t)99;
-    MotorStatus_t result = MotorController_Move(action);
-    TEST_ASSERT_EQUAL(MOTOR_ERR, result);
+    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_PIN_1, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_PIN_2, GPIO_PIN_RESET);
+
+    int result = MotorController_Move(0);
+
+    TEST_ASSERT_EQUAL(0, result);
 }
 
-void test_MotorController_Move_HALPinSet_Fails_ReturnsError(void)
+void test_MotorController_Move_Maximum_Position(void)
 {
-    MotorAction_t action = CMD_MOVE_UP;
-    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_UP_PIN, GPIO_PIN_SET);
-    MotorStatus_t result = MotorController_Move(action);
-    TEST_ASSERT_EQUAL(MOTOR_OK, result);
-}
+    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_PIN_1, GPIO_PIN_SET);
+    HAL_GPIO_WritePin_Expect(MOTOR_PORT, MOTOR_PIN_2, GPIO_PIN_RESET);
 
-void test_MotorController_Move_Boundary_NoDependencies_NoCrash(void)
-{
-    MotorStatus_t result = MotorController_Move(CMD_STOP);
-    TEST_ASSERT_EQUAL(MOTOR_OK, result);
+    int result = MotorController_Move(MOTOR_MAX_POSITION);
+
+    TEST_ASSERT_EQUAL(0, result);
 }
