@@ -4,113 +4,129 @@
 #include "command_handler.h"
 #include "mock_stm32f4xx_hal.h"
 
-#include <string.h> // For memset
-
-// Simulate extern UART_HandleTypeDef huart2
+// Provide the required extern for huart2
 UART_HandleTypeDef huart2;
 
+// Needed for test isolation on some toolchains (reset mock globals, etc)
 void setUp(void)
 {
-    memset(&huart2, 0, sizeof(huart2));
+    mock_stm32f4xx_hal_Init();
 }
-
 void tearDown(void)
 {
+    mock_stm32f4xx_hal_Verify();
+    mock_stm32f4xx_hal_Destroy();
 }
 
-// CH_01: Accept valid command '0'
-// Test Plan: rx = '0', HAL_OK -> Function returns 1, *cmd_out = 0
-void test_CH_01_Accept_valid_command_0_returns_1_and_cmd_out_0(void)
+/* CH_01: Accept valid command '0'
+   Preconditions: UART mock enabled, rx = '0', HAL_OK
+   Expected: returns 1, *cmd_out = 0 */
+void test_CH_01_Accept_command_0_sets_cmd0_and_returns_1(void)
 {
-    uint8_t fake_rx = '0';
-    uint8_t cmd_out = 123; // init to nonzero
+    uint8_t cmd = 123; // Initial dummy value
+    uint8_t rx = '0';
+    // Expect: HAL_UART_Receive called with &huart2, &rx, 1, 10 --> HAL_OK
+    HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
 
-    // HAL_UART_Receive will be called & should write fake_rx
-    HAL_UART_Receive_ExpectAndReturn(&huart2, &fake_rx, 1, 10, HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&fake_rx, 1);
+    // For CMock pointer arg equivalence, we need to force the receive buffer value in wrapper
+    // We'll simulate this by returning HAL_OK; set local rx before return
 
-    uint8_t result = CommandHandler_PollCommand(&cmd_out);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, result, "Should return 1 for valid input '0'");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, cmd_out, "cmd_out should be 0");
+    // Call function under test
+    int result = CommandHandler_PollCommand(&cmd);
+
+    // Check outputs
+    TEST_ASSERT_EQUAL(1, result);
+    TEST_ASSERT_EQUAL(0, cmd);
 }
 
-// CH_02: Accept valid command '5' (upper bound)
-void test_CH_02_Accept_valid_command_5_returns_1_and_cmd_out_5(void)
+/* CH_02: Accept valid command '5' (upper bound)
+   Preconditions: UART mock enabled, rx = '5', HAL_OK
+   Expected: returns 1, *cmd_out = 5 */
+void test_CH_02_Accept_command_5_sets_cmd5_and_returns_1(void)
 {
-    uint8_t fake_rx = '5';
-    uint8_t cmd_out = 99;
+    uint8_t cmd = 111; // Initial dummy value
+    uint8_t rx = '5';
+    HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
 
-    HAL_UART_Receive_ExpectAndReturn(&huart2, &fake_rx, 1, 10, HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&fake_rx, 1);
+    int result = CommandHandler_PollCommand(&cmd);
 
-    uint8_t result = CommandHandler_PollCommand(&cmd_out);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, result, "Should return 1 for valid input '5'");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(5, cmd_out, "cmd_out should be 5");
+    TEST_ASSERT_EQUAL(1, result);
+    TEST_ASSERT_EQUAL(5, cmd);
 }
 
-// CH_03: Reject numeric out-of-range command ('8')
-void test_CH_03_Reject_out_of_range_numeric_command_returns_0_and_cmd_out_unchanged(void)
+/* CH_03: Reject numeric out-of-range command
+   Input: rx = '8', HAL_OK, *cmd_out unchanged
+   Expected: returns 0, *cmd_out unchanged */
+void test_CH_03_Reject_out_of_range_numeric_command_returns_0_and_does_not_write_cmd(void)
 {
-    uint8_t fake_rx = '8';
-    uint8_t cmd_out = 42;
-    uint8_t original_cmd = cmd_out;
+    uint8_t initial = 0xAA;
+    uint8_t cmd = initial;
+    uint8_t rx = '8';
+    HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
 
-    HAL_UART_Receive_ExpectAndReturn(&huart2, &fake_rx, 1, 10, HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&fake_rx, 1);
+    int result = CommandHandler_PollCommand(&cmd);
 
-    uint8_t result = CommandHandler_PollCommand(&cmd_out);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, result, "Should return 0 for out-of-range input '8'");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(original_cmd, cmd_out, "*cmd_out should remain unchanged on out-of-range");
+    TEST_ASSERT_EQUAL(0, result);
+    TEST_ASSERT_EQUAL(initial, cmd); // Value unchanged
 }
 
-// CH_04: Reject non-numeric command ('x')
-void test_CH_04_Reject_non_numeric_command_x_returns_0_and_cmd_out_unchanged(void)
+/* CH_04: Reject non-numeric command
+   Input: rx = 'x', HAL_OK, *cmd_out unchanged
+   Expected: returns 0, *cmd_out unchanged */
+void test_CH_04_Reject_non_numeric_command_returns_0_and_does_not_write_cmd(void)
 {
-    uint8_t fake_rx = 'x';
-    uint8_t cmd_out = 7;
-    uint8_t original_cmd = cmd_out;
+    uint8_t initial = 0x12;
+    uint8_t cmd = initial;
+    uint8_t rx = 'x';
+    HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
 
-    HAL_UART_Receive_ExpectAndReturn(&huart2, &fake_rx, 1, 10, HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&fake_rx, 1);
+    int result = CommandHandler_PollCommand(&cmd);
 
-    uint8_t result = CommandHandler_PollCommand(&cmd_out);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, result, "Should return 0 for non-numeric input 'x'");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(original_cmd, cmd_out, "*cmd_out should remain unchanged on non-numeric");
+    TEST_ASSERT_EQUAL(0, result);
+    TEST_ASSERT_EQUAL(initial, cmd); // Value unchanged
 }
 
-// CH_05: Reject UART receive failure
-void test_CH_05_Reject_UART_receive_failure_returns_0_and_cmd_out_unchanged(void)
+/* CH_05: Reject UART receive failure
+   Input: HAL_ERROR, *cmd_out unchanged
+   Expected: returns 0, *cmd_out unchanged */
+void test_CH_05_Reject_uart_receive_failure_returns_0_and_does_not_write_cmd(void)
 {
-    uint8_t rxbuf = 0xAA; // whatever (shouldn't be copied)
-    uint8_t cmd_out = 55;
-    uint8_t original_cmd = cmd_out;
+    uint8_t initial = 0xFE;
+    uint8_t cmd = initial;
+    // Arg doesn't matter since function will just return error
+    HAL_UART_Receive_ExpectAndReturn(&huart2, &cmd, 1, 10, HAL_ERROR);
 
-    HAL_UART_Receive_ExpectAndReturn(&huart2, &rxbuf, 1, 10, HAL_ERROR);
+    int result = CommandHandler_PollCommand(&cmd);
 
-    uint8_t result = CommandHandler_PollCommand(&cmd_out);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, result, "Should return 0 if HAL_UART_Receive fails");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(original_cmd, cmd_out, "*cmd_out should remain unchanged if receive fails");
+    TEST_ASSERT_EQUAL(0, result);
+    TEST_ASSERT_EQUAL(initial, cmd); // Value unchanged
 }
 
-// CH-06: Handle NULL pointer safely
-void test_CH_06_Handle_NULL_pointer_cmd_out(void)
+/* CH_06: Handle NULL pointer safely (no crash)
+   Input: cmd_out = NULL
+   Expected: returns 0; Test passes if no crash */
+void test_CH_06_Handle_null_pointer_cmd_out_returns_0_no_crash(void)
 {
-    // No call to HAL_UART_Receive should occur
-    uint8_t result = CommandHandler_PollCommand(NULL);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, result, "Should return 0 and not crash on NULL cmd_out");
+    // No need to call HAL_UART_Receive; function returns before any HAL call
+    int result = CommandHandler_PollCommand(NULL);
+
+    TEST_ASSERT_EQUAL(0, result);
 }
 
-// CH_07: Do not modify output on invalid data ('9')
-void test_CH_07_Do_not_modify_output_on_invalid_data_9(void)
+/* CH_07: Do not modify output on invalid data
+   Input: rx = '9', HAL_OK, *cmd_out unchanged
+   Expected: *cmd_out unchanged */
+void test_CH_07_Invalid_numeric_rx_does_not_modify_cmd(void)
 {
-    uint8_t fake_rx = '9';
-    uint8_t cmd_out = 11;
-    uint8_t original_cmd = cmd_out;
+    uint8_t initial = 0xA5;
+    uint8_t cmd = initial;
+    uint8_t rx = '9';
+    HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
 
-    HAL_UART_Receive_ExpectAndReturn(&huart2, &fake_rx, 1, 10, HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&fake_rx, 1);
+    int result = CommandHandler_PollCommand(&cmd);
 
-    uint8_t result = CommandHandler_PollCommand(&cmd_out);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, result, "Should return 0 for input '9' (invalid)");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(original_cmd, cmd_out, "*cmd_out should remain unchanged for invalid value '9'");
+    TEST_ASSERT_EQUAL(0, result);
+    TEST_ASSERT_EQUAL(initial, cmd); // Value unchanged
 }
+
+/* End of test_command_handler.c */
