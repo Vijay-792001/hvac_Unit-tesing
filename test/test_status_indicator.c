@@ -1,48 +1,29 @@
 #include "unity.h"
 #include "status_indicator.h"
-#include "mock_hal.h"
+#include "mock_stm32f4xx_hal.h"
 
 void setUp(void) {}
 void tearDown(void) {}
 
-void test_StatusIndicator_Set_On_ShouldCallHALAndSucceed(void)
-{
-    Indicator_t indicator = INDICATOR_POWER;
-    IndicatorState_t state = INDICATOR_STATE_ON;
-    mock_HAL_SetIndicator_ExpectAndReturn(indicator, state, HAL_OK);
-    int result = StatusIndicator_Set(indicator, state);
+void test_StatusIndicator_Set_Success(void) {
+    HAL_GPIO_WritePin_ExpectAndReturn(GPIO_STATUS_PORT, GPIO_PIN_STATUS_RUNNING, GPIO_PIN_SET, HAL_OK);
+    int result = status_indicator_set(STATUS_RUNNING);
     TEST_ASSERT_EQUAL(0, result);
 }
 
-void test_StatusIndicator_Set_Off_ShouldCallHALAndSucceed(void)
-{
-    Indicator_t indicator = INDICATOR_ERROR;
-    IndicatorState_t state = INDICATOR_STATE_OFF;
-    mock_HAL_SetIndicator_ExpectAndReturn(indicator, state, HAL_OK);
-    int result = StatusIndicator_Set(indicator, state);
+void test_StatusIndicator_Set_Stopped(void) {
+    HAL_GPIO_WritePin_ExpectAndReturn(GPIO_STATUS_PORT, GPIO_PIN_STATUS_RUNNING, GPIO_PIN_RESET, HAL_OK);
+    int result = status_indicator_set(STATUS_STOPPED);
     TEST_ASSERT_EQUAL(0, result);
 }
 
-void test_StatusIndicator_Set_HAL_Error_ShouldReturnError(void)
-{
-    Indicator_t indicator = INDICATOR_POWER;
-    IndicatorState_t state = INDICATOR_STATE_ON;
-    mock_HAL_SetIndicator_ExpectAndReturn(indicator, state, HAL_ERROR);
-    int result = StatusIndicator_Set(indicator, state);
-    TEST_ASSERT_EQUAL(-2, result);
-}
-
-void test_StatusIndicator_Set_InvalidIndicatorID_ShouldReturnError(void)
-{
-    Indicator_t indicator = (Indicator_t)99;
-    IndicatorState_t state = INDICATOR_STATE_ON;
-    int result = StatusIndicator_Set(indicator, state);
+void test_StatusIndicator_Set_InvalidStatus(void) {
+    int result = status_indicator_set((status_t)99);
     TEST_ASSERT_EQUAL(-1, result);
 }
 
-void test_StatusIndicator_Set_NullSafeHandling_ShouldReturnError(void)
-{
-    StatusIndicator_t* indicator_ptr = NULL;
-    int result = StatusIndicator_SetPtr(indicator_ptr, INDICATOR_STATE_ON);
-    TEST_ASSERT_EQUAL(-3, result);
+void test_StatusIndicator_Set_HALFailure(void) {
+    HAL_GPIO_WritePin_ExpectAndReturn(GPIO_STATUS_PORT, GPIO_PIN_STATUS_RUNNING, GPIO_PIN_SET, HAL_ERROR);
+    int result = status_indicator_set(STATUS_RUNNING);
+    TEST_ASSERT_EQUAL(-2, result);
 }

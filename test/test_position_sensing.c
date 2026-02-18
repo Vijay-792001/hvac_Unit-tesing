@@ -1,45 +1,53 @@
 #include "unity.h"
 #include "position_sensing.h"
-#include "mock_hal.h"
+#include "mock_stm32f4xx_hal.h"
 
 void setUp(void) {}
 void tearDown(void) {}
 
-void test_PositionSensing_ReadPosition_Normal_ShouldReturnExpectedValue(void)
-{
-    Sensor_t sensor = SENSOR_MAIN;
-    int32_t raw_value = 12345;
-    mock_HAL_ReadSensor_ExpectAndReturn(sensor, raw_value);
-    int pos = PositionSensing_Read(sensor);
-    TEST_ASSERT_EQUAL(raw_value, pos);
+void test_PositionSensing_Get_Success(void) {
+    ADC_HandleTypeDef hadc_stub = {0};
+    HAL_ADC_Start_ExpectAndReturn(&hadc_stub, HAL_OK);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc_stub, 100, HAL_OK);
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc_stub, 2000);
+    HAL_ADC_Stop_ExpectAndReturn(&hadc_stub, HAL_OK);
+    position_t pos = {0};
+    int ret = position_sensing_get(&pos);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(2000, pos.raw_adc);
 }
 
-void test_PositionSensing_ReadPosition_HAL_Failure_ShouldReturnError(void)
-{
-    Sensor_t sensor = SENSOR_MAIN;
-    mock_HAL_ReadSensor_ExpectAndReturn(sensor, -1);
-    int pos = PositionSensing_Read(sensor);
-    TEST_ASSERT_EQUAL(-1, pos);
+void test_PositionSensing_Get_ADCStartFailure(void) {
+    ADC_HandleTypeDef hadc_stub = {0};
+    HAL_ADC_Start_ExpectAndReturn(&hadc_stub, HAL_ERROR);
+    position_t pos = {0};
+    int ret = position_sensing_get(&pos);
+    TEST_ASSERT_EQUAL(-1, ret);
 }
 
-void test_PositionSensing_ReadPosition_InvalidSensor_ShouldReturnError(void)
-{
-    Sensor_t sensor = (Sensor_t)77;
-    int pos = PositionSensing_Read(sensor);
-    TEST_ASSERT_EQUAL(-2, pos);
+void test_PositionSensing_Get_ADCPollForConversionFailure(void) {
+    ADC_HandleTypeDef hadc_stub = {0};
+    HAL_ADC_Start_ExpectAndReturn(&hadc_stub, HAL_OK);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc_stub, 100, HAL_ERROR);
+    HAL_ADC_Stop_ExpectAndReturn(&hadc_stub, HAL_OK);
+    position_t pos = {0};
+    int ret = position_sensing_get(&pos);
+    TEST_ASSERT_EQUAL(-2, ret);
 }
 
-void test_PositionSensing_ReadPosition_NullPointer_ShouldReturnError(void)
-{
-    int ret = PositionSensing_ReadToPtr(NULL, SENSOR_MAIN);
+void test_PositionSensing_Get_ADCStopFailure(void) {
+    ADC_HandleTypeDef hadc_stub = {0};
+    HAL_ADC_Start_ExpectAndReturn(&hadc_stub, HAL_OK);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc_stub, 100, HAL_OK);
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc_stub, 1234);
+    HAL_ADC_Stop_ExpectAndReturn(&hadc_stub, HAL_ERROR);
+    position_t pos = {0};
+    int ret = position_sensing_get(&pos);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL(1234, pos.raw_adc);
+}
+
+void test_PositionSensing_Get_NullPointer(void) {
+    int ret = position_sensing_get(NULL);
     TEST_ASSERT_EQUAL(-3, ret);
-}
-
-void test_PositionSensing_ReadPosition_BoundarySensor_ShouldReturnExpectedValue(void)
-{
-    Sensor_t sensor = SENSOR_MAX_VALID;
-    int32_t val = 5555;
-    mock_HAL_ReadSensor_ExpectAndReturn(sensor, val);
-    int pos = PositionSensing_Read(sensor);
-    TEST_ASSERT_EQUAL(val, pos);
 }
