@@ -8,7 +8,7 @@
 
 TIM_HandleTypeDef htim3;
 GPIO_TypeDef GPIOB_inst;
-GPIO_TypeDef *GPIOB = &GPIOB_inst;
+#GPIO_TypeDef *GPIOB = &GPIOB_inst;
 
 void setUp(void)
 {
