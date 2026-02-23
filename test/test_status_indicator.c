@@ -3,123 +3,122 @@
 #include "status_indicator.h"
 #include "mock_stm32f4xx_hal.h"
 
-// Provide instance for the GPIOC referenced in the module
-GPIO_TypeDef GPIOC_inst;
-GPIO_TypeDef *GPIOC = &GPIOC_inst;
+static GPIO_TypeDef dummy_GPIOB;
+GPIO_TypeDef *const LED_GPIO_Port = &dummy_GPIOB;
 
-// ----- setUp/tearDown -----
 void setUp(void)
 {
-    // Nothing needed
+    // No module state persistence to reset
 }
 
 void tearDown(void)
 {
-    // Nothing needed
 }
 
-/* ============= SI_01: SWE-REQ-025
-   Power LED turns ON after init; all position LEDs OFF
-   Power LED ON, all pos LEDs OFF: PIN_0 SET, PIN_1..5 RESET
-*/
-void test_SI_01_PowerLED_On_AllPositionLEDs_Off_OnInit(void)
+/* SI_01: Indicator_On turns the indicator on (sets GPIO_PIN_SET) */
+void test_SI_01_Indicator_On_sets_GPIO_HIGH(void)
 {
-    GPIO_InitTypeDef expected_cfg;
-
-    // Expect HAL_GPIO_Init for all 6 pins on GPIOC
-    HAL_GPIO_Init_Expect(GPIOC, &expected_cfg);
-
-    // Power LED ON
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_0, GPIO_PIN_SET);
-
-    // All position LEDs OFF (pins 1-5)
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
-
-    StatusIndicator_Init();
+    HAL_GPIO_WritePin_Expect(LED_GPIO_Port, STATUS_INDICATOR_PIN, GPIO_PIN_SET);
+    StatusIndicator_On();
 }
 
-/* ============= SI_02: SWE-REQ-026
-   Position 0 shows no green LED (position LEDs OFF)
-   Only RESET calls for GPIO_PIN_1..5; no SET calls
-*/
-void test_SI_02_Pos0_NoGreenLED_AllOff(void)
+/* SI_02: Indicator_Off turns the indicator off (sets GPIO_PIN_RESET) */
+void test_SI_02_Indicator_Off_sets_GPIO_LOW(void)
 {
-    // All position LEDs OFF
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
-
-    StatusIndicator_Update(1, 0);
+    HAL_GPIO_WritePin_Expect(LED_GPIO_Port, STATUS_INDICATOR_PIN, GPIO_PIN_RESET);
+    StatusIndicator_Off();
 }
 
-/* ============= SI_03: SWE-REQ-027
-   Display position 5, only LED for pos 5 ON (after all reset)
-   RESET all pins then SET GPIO_PIN_5 (for pos=5)
-*/
-void test_SI_03_DisplayPosition5_OnlyLED5_ON(void)
+/* SI_03: Indicator_Toggle toggles current indicator state */
+void test_SI_03_Indicator_Toggle_performs_GPIO_Toggle(void)
 {
-    // RESET all LEDs first
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
-
-    // Only LED for pos=5 ON, s_led_pos_pins[4] = GPIO_PIN_5
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_SET);
-
-    StatusIndicator_Update(1, 5);
+    HAL_GPIO_TogglePin_Expect(LED_GPIO_Port, STATUS_INDICATOR_PIN);
+    StatusIndicator_Toggle();
 }
 
-/* ============= SI_04: SWE-REQ-029
-   Invalid position -> all position LEDs OFF
-   Only RESET calls for GPIO_PIN_1..5
-*/
-void test_SI_04_InvalidPosition_AllLEDsOFF(void)
+/* SI_04: Indicator_Blink calls On, then Off with a delay between */
+void test_SI_04_Indicator_Blink_On_Off_Delay(void)
 {
-    // All position LEDs OFF
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
-
-    StatusIndicator_Update(0, 0xFF);
+    HAL_GPIO_WritePin_Expect(LED_GPIO_Port, STATUS_INDICATOR_PIN, GPIO_PIN_SET);
+    HAL_Delay_Expect(STATUS_INDICATOR_BLINK_DELAY_MS);
+    HAL_GPIO_WritePin_Expect(LED_GPIO_Port, STATUS_INDICATOR_PIN, GPIO_PIN_RESET);
+    StatusIndicator_Blink();
 }
 
-/* ============= SI_05: SWE-REQ-044
-   Power LED software control: OFF then ON
-   GPIO_PIN_0 RESET, then GPIO_PIN_0 SET
-*/
-void test_SI_05_PowerLED_SoftwareControl_OffThenOn(void)
+/* SI_05: Indicator_On is idempotent */
+void test_SI_05_Indicator_On_idempotent(void)
 {
-    // Turn OFF
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET);
-    StatusIndicator_SetPowerLED(0);
+    // Should simply set pin high each call
+    HAL_GPIO_WritePin_Expect(LED_GPIO_Port, STATUS_INDICATOR_PIN, GPIO_PIN_SET);
+    StatusIndicator_On();
 
-    // Turn ON
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_0, GPIO_PIN_SET);
-    StatusIndicator_SetPowerLED(1);
+    HAL_GPIO_WritePin_Expect(LED_GPIO_Port, STATUS_INDICATOR_PIN, GPIO_PIN_SET);
+    StatusIndicator_On();
 }
 
-/* ============= SI_06: SWE-REQ-024
-   Boundary out-of-range (pos=6): all OFF
-   Only RESET calls for GPIO_PIN_1..5
-*/
-void test_SI_06_BoundaryOutOfRange_Pos6_AllOFF(void)
+/* SI_06: Indicator_Off is idempotent */
+void test_SI_06_Indicator_Off_idempotent(void)
 {
-    // All position LEDs OFF
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
+    // Should simply set pin low each call
+    HAL_GPIO_WritePin_Expect(LED_GPIO_Port, STATUS_INDICATOR_PIN, GPIO_PIN_RESET);
+    StatusIndicator_Off();
 
-    StatusIndicator_Update(1, 6);
+    HAL_GPIO_WritePin_Expect(LED_GPIO_Port, STATUS_INDICATOR_PIN, GPIO_PIN_RESET);
+    StatusIndicator_Off();
+}
+
+/* SI_07: Indicator_On/Off with NULL port pointer should not call HAL */
+void test_SI_07_Indicator_OnOff_NULL_Port_pointer_does_not_call_HAL(void)
+{
+    // Change LED_GPIO_Port to NULL and call, expect no call to HAL_GPIO_WritePin
+    GPIO_TypeDef *const orig_port = LED_GPIO_Port;
+
+    // Test On
+    *((GPIO_TypeDef **)&LED_GPIO_Port) = NULL;
+    StatusIndicator_On();
+
+    // Test Off
+    StatusIndicator_Off();
+
+    // Restore pointer for subsequent tests
+    *((GPIO_TypeDef **)&LED_GPIO_Port) = orig_port;
+}
+
+/* SI_08: Indicator_Toggle with NULL port pointer should not call HAL */
+void test_SI_08_Indicator_Toggle_NULL_Port_pointer_does_not_call_HAL(void)
+{
+    GPIO_TypeDef *const orig_port = LED_GPIO_Port;
+
+    *((GPIO_TypeDef **)&LED_GPIO_Port) = NULL;
+    StatusIndicator_Toggle();
+
+    // Restore pointer for subsequent tests
+    *((GPIO_TypeDef **)&LED_GPIO_Port) = orig_port;
+}
+
+/* SI_09: Indicator_Blink with NULL port pointer should not call HAL or Delay */
+void test_SI_09_Indicator_Blink_NULL_Port_pointer_does_not_call_HAL(void)
+{
+    GPIO_TypeDef *const orig_port = LED_GPIO_Port;
+
+    *((GPIO_TypeDef **)&LED_GPIO_Port) = NULL;
+    StatusIndicator_Blink();
+
+    *((GPIO_TypeDef **)&LED_GPIO_Port) = orig_port;
+}
+
+/* SI_10: Blink idempotent, multiple rapid calls behave as expected */
+void test_SI_10_Indicator_Blink_multiple_calls_okay(void)
+{
+    // Two successive calls: On, Delay, Off (x2)
+    HAL_GPIO_WritePin_Expect(LED_GPIO_Port, STATUS_INDICATOR_PIN, GPIO_PIN_SET);
+    HAL_Delay_Expect(STATUS_INDICATOR_BLINK_DELAY_MS);
+    HAL_GPIO_WritePin_Expect(LED_GPIO_Port, STATUS_INDICATOR_PIN, GPIO_PIN_RESET);
+
+    HAL_GPIO_WritePin_Expect(LED_GPIO_Port, STATUS_INDICATOR_PIN, GPIO_PIN_SET);
+    HAL_Delay_Expect(STATUS_INDICATOR_BLINK_DELAY_MS);
+    HAL_GPIO_WritePin_Expect(LED_GPIO_Port, STATUS_INDICATOR_PIN, GPIO_PIN_RESET);
+
+    StatusIndicator_Blink();
+    StatusIndicator_Blink();
 }

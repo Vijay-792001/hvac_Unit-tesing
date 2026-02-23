@@ -3,52 +3,42 @@
 #include "position_sensing.h"
 #include "mock_stm32f4xx_hal.h"
 
-// Provide instance for the ADC handle referenced in the module
-ADC_HandleTypeDef hadc1;
-
-/* ========== Utility for internal reset ========== */
-// No internal reset is strictly needed, as Init() resets all static state
+/* Globals provided via source */
+extern ADC_HandleTypeDef hadc1;
 
 void setUp(void)
 {
-    // Always call init before each test for isolation
     PositionSensing_Init();
 }
 
 void tearDown(void)
 {
-    // Nothing required
 }
 
-/* === PS_01: SWE-REQ-040
-   Init resets internal state (invalid + not valid)
-   PositionSensing_IsValid()=0, PositionSensing_GetPosition()=0
-*/
-void test_PS_01_Init_ResetsInternalState_Invalid(void)
+/* PS_01: Init resets state to invalid, not valid */
+void test_PS_01_Init_resets_state_to_invalid_and_not_valid(void)
 {
-    // Already called in setUp()
+    /* After Init: IsValid() = 0, GetPosition() = 0, pos_out not changed */
+    uint8_t before = 0xA5;
+    uint8_t pos_out = before;
+
+    PositionSensing_Init();
+
     TEST_ASSERT_EQUAL_UINT8(0, PositionSensing_IsValid());
-    uint8_t pos = 55;
-    TEST_ASSERT_EQUAL_UINT8(0, PositionSensing_GetPosition(&pos));
-    // pos should remain unchanged since return is 0
-    TEST_ASSERT_EQUAL_UINT8(55, pos);
+    TEST_ASSERT_EQUAL_UINT8(0, PositionSensing_GetPosition(&pos_out));
+    TEST_ASSERT_EQUAL_UINT8(before, pos_out);
 }
 
-/* === PS_02: SWE-REQ-019
-   PositionSensing_GetPosition() rejects NULL pointer
-   Return = 0
-*/
-void test_PS_02_GetPosition_RejectsNullPointer(void)
+/* PS_02: GetPosition rejects NULL pointer */
+void test_PS_02_GetPosition_rejects_NULL_pointer(void)
 {
     TEST_ASSERT_EQUAL_UINT8(0, PositionSensing_GetPosition(NULL));
 }
 
-/* === PS_03: SWE-REQ-018
-   Update sets valid when ADC poll OK, GetValue=4060
-   PositionSensing_IsValid()=1, PositionSensing_GetPosition()=1, pos=0
-*/
-void test_PS_03_Update_SetsValid_WhenADCPollOK_Value4060(void)
+/* PS_03: Update sets valid when ADC poll OK; maps 4060 to position 0 */
+void test_PS_03_Update_sets_valid_when_ADC_poll_OK(void)
 {
+    /* HAL sequence: Start, PollForConversion (OK), GetValue (4060) */
     HAL_ADC_Start_Expect(&hadc1);
     HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
     HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 4060);
@@ -56,16 +46,13 @@ void test_PS_03_Update_SetsValid_WhenADCPollOK_Value4060(void)
     PositionSensing_Update();
 
     TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_IsValid());
-
-    uint8_t pos = 99;
-    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos));
-    TEST_ASSERT_EQUAL_UINT8(0, pos);
+    uint8_t pos_out = 0xAA;
+    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos_out));
+    TEST_ASSERT_EQUAL_UINT8(0, pos_out);
 }
 
-/* === PS_04: SWE-REQ-015
-   Map ADC to position 1 region (e.g., 3800)
-*/
-void test_PS_04_Update_MapsADCToPosition1(void)
+/* PS_04: Map ADC 3800 to position 1 */
+void test_PS_04_Maps_ADC_3800_to_position_1(void)
 {
     HAL_ADC_Start_Expect(&hadc1);
     HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
@@ -73,15 +60,13 @@ void test_PS_04_Update_MapsADCToPosition1(void)
 
     PositionSensing_Update();
 
-    uint8_t pos = 55;
-    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos));
-    TEST_ASSERT_EQUAL_UINT8(1, pos);
+    uint8_t pos_out = 0xCC;
+    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos_out));
+    TEST_ASSERT_EQUAL_UINT8(1, pos_out);
 }
 
-/* === PS_05: SWE-REQ-015
-   Map ADC to position 2 region (e.g., 3500)
-*/
-void test_PS_05_Update_MapsADCToPosition2(void)
+/* PS_05: Map ADC 3500 to position 2 */
+void test_PS_05_Maps_ADC_3500_to_position_2(void)
 {
     HAL_ADC_Start_Expect(&hadc1);
     HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
@@ -89,15 +74,13 @@ void test_PS_05_Update_MapsADCToPosition2(void)
 
     PositionSensing_Update();
 
-    uint8_t pos = 66;
-    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos));
-    TEST_ASSERT_EQUAL_UINT8(2, pos);
+    uint8_t pos_out = 0xBB;
+    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos_out));
+    TEST_ASSERT_EQUAL_UINT8(2, pos_out);
 }
 
-/* === PS_06: SWE-REQ-015
-   Map ADC to position 3 region (e.g., 3000)
-*/
-void test_PS_06_Update_MapsADCToPosition3(void)
+/* PS_06: Map ADC 3000 to position 3 */
+void test_PS_06_Maps_ADC_3000_to_position_3(void)
 {
     HAL_ADC_Start_Expect(&hadc1);
     HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
@@ -105,15 +88,13 @@ void test_PS_06_Update_MapsADCToPosition3(void)
 
     PositionSensing_Update();
 
-    uint8_t pos = 99;
-    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos));
-    TEST_ASSERT_EQUAL_UINT8(3, pos);
+    uint8_t pos_out = 0xDD;
+    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos_out));
+    TEST_ASSERT_EQUAL_UINT8(3, pos_out);
 }
 
-/* === PS_07: SWE-REQ-015
-   Map ADC to position 4 region (e.g., 1500)
-*/
-void test_PS_07_Update_MapsADCToPosition4(void)
+/* PS_07: Map ADC 1500 to position 4 */
+void test_PS_07_Maps_ADC_1500_to_position_4(void)
 {
     HAL_ADC_Start_Expect(&hadc1);
     HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
@@ -121,15 +102,13 @@ void test_PS_07_Update_MapsADCToPosition4(void)
 
     PositionSensing_Update();
 
-    uint8_t pos = 3;
-    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos));
-    TEST_ASSERT_EQUAL_UINT8(4, pos);
+    uint8_t pos_out = 0xED;
+    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos_out));
+    TEST_ASSERT_EQUAL_UINT8(4, pos_out);
 }
 
-/* === PS_08: SWE-REQ-015
-   Map ADC to position 5 region (e.g., 500)
-*/
-void test_PS_08_Update_MapsADCToPosition5(void)
+/* PS_08: Map ADC 500 to position 5 (lowest range) */
+void test_PS_08_Maps_ADC_500_to_position_5(void)
 {
     HAL_ADC_Start_Expect(&hadc1);
     HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
@@ -137,16 +116,13 @@ void test_PS_08_Update_MapsADCToPosition5(void)
 
     PositionSensing_Update();
 
-    uint8_t pos = 12;
-    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos));
-    TEST_ASSERT_EQUAL_UINT8(5, pos);
+    uint8_t pos_out = 0x55;
+    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos_out));
+    TEST_ASSERT_EQUAL_UINT8(5, pos_out);
 }
 
-/* === PS_09: SWE-REQ-053
-   Update sets invalid when ADC poll fails
-   IsValid=0, GetPosition=0
-*/
-void test_PS_09_Update_ADCPollFails_SetsInvalid(void)
+/* PS_09: Update sets invalid when ADC poll fails */
+void test_PS_09_Update_sets_invalid_when_poll_fails(void)
 {
     HAL_ADC_Start_Expect(&hadc1);
     HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_ERROR);
@@ -154,74 +130,68 @@ void test_PS_09_Update_ADCPollFails_SetsInvalid(void)
     PositionSensing_Update();
 
     TEST_ASSERT_EQUAL_UINT8(0, PositionSensing_IsValid());
-    uint8_t pos = 7;
-    TEST_ASSERT_EQUAL_UINT8(0, PositionSensing_GetPosition(&pos));
-    TEST_ASSERT_EQUAL_UINT8(7, pos); // Unchanged
+    uint8_t pos_out = 0xF1;
+    TEST_ASSERT_EQUAL_UINT8(0, PositionSensing_GetPosition(&pos_out));
+    TEST_ASSERT_EQUAL_UINT8(0xF1, pos_out);
 }
 
-/* === PS_10: SWE-REQ-019
-   GetPosition returns last mapped value after successful update
-*/
-void test_PS_10_GetPosition_ReturnsLastMapped_AfterSuccess(void)
+/* PS_10: GetPosition returns last mapped position after update */
+void test_PS_10_GetPosition_returns_last_mapped_after_update(void)
 {
-    // First update to 3000 maps to pos=3
     HAL_ADC_Start_Expect(&hadc1);
     HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
-    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 3000);
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 3000); // This maps to 3
 
     PositionSensing_Update();
 
-    uint8_t pos = 1;
-    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos));
-    TEST_ASSERT_EQUAL_UINT8(3, pos);
+    uint8_t pos_out = 0x99;
+    TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_GetPosition(&pos_out));
+    TEST_ASSERT_EQUAL_UINT8(3, pos_out);
 }
 
-/* === PS_11: SWE-REQ-016
-   IsAtTarget rejects out-of-range target (>=6); returns 0
-*/
-void test_PS_11_IsAtTarget_RejectsOutOfRangeTarget(void)
+/* PS_11: IsAtTarget rejects out-of-range target (>=6) */
+void test_PS_11_IsAtTarget_rejects_out_of_range_target(void)
 {
+    /* Out of range is >= 6 */
     TEST_ASSERT_EQUAL_UINT8(0, PositionSensing_IsAtTarget(6));
-    TEST_ASSERT_EQUAL_UINT8(0, PositionSensing_IsAtTarget(99));
+    TEST_ASSERT_EQUAL_UINT8(0, PositionSensing_IsAtTarget(255)); // check FLAP_POSITION_INVALID
 }
 
-/* === PS_12: SWE-REQ-016
-   IsAtTarget returns 1 if ADC inside stop range (target=0, value=4060)
-*/
-void test_PS_12_IsAtTarget_Returns1_IfInsideStopWindow(void)
+/* PS_12: IsAtTarget returns 1 when adc is inside stop range */
+void test_PS_12_IsAtTarget_returns_1_when_adc_inside_stop_range(void)
 {
+    /* Update with 4060 (maps to stop_ranges[0] 4055-4065), and test IsAtTarget(0) */
     HAL_ADC_Start_Expect(&hadc1);
     HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
     HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 4060);
 
     PositionSensing_Update();
-    // 4060 is inside the stop range for target 0
+
     TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_IsAtTarget(0));
 }
 
-/* === PS_13: SWE-REQ-016
-   IsAtTarget returns 0 when ADC is outside stop window (target=0, value=4040)
-*/
-void test_PS_13_IsAtTarget_Returns0_IfOutsideStopWindow(void)
+/* PS_13: IsAtTarget returns 0 when adc is outside stop range */
+void test_PS_13_IsAtTarget_returns_0_when_adc_outside_stop_range(void)
 {
+    /* Update with 4040 (outside 4055-4065), IsAtTarget(0) should return 0 */
     HAL_ADC_Start_Expect(&hadc1);
     HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
     HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 4040);
 
     PositionSensing_Update();
+
     TEST_ASSERT_EQUAL_UINT8(0, PositionSensing_IsAtTarget(0));
 }
 
-/* === PS_14: SWE-REQ-016
-   IsAtTarget works for another target stop window (target=3, value=3320)
-*/
-void test_PS_14_IsAtTarget_WithinStopWindowForOtherTarget(void)
+/* PS_14: IsAtTarget works for another target stop window */
+void test_PS_14_IsAtTarget_works_for_another_stop_window(void)
 {
+    /* Update with 3320 (maps to stop_ranges[3]: 3309-3329), IsAtTarget(3) should return 1 */
     HAL_ADC_Start_Expect(&hadc1);
     HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 2, HAL_OK);
     HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 3320);
 
     PositionSensing_Update();
-    // 3320 is in stop range for target 3
+
     TEST_ASSERT_EQUAL_UINT8(1, PositionSensing_IsAtTarget(3));
 }
