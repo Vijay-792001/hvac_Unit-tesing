@@ -18,7 +18,6 @@ void tearDown(void)
     /* By default no special teardown required */
 }
 
-
 /*
  * CH_01: Accept valid command '0'
  * Input: rx = '0', HAL_OK
