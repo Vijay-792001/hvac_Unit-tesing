@@ -4,191 +4,292 @@
 #include "mock_stm32f4xx_hal.h"
 #include "mock_position_sensing.h"
 
-extern TIM_HandleTypeDef htim3;
+/* External handle(s) per source code */
+TIM_HandleTypeDef htim3;
+GPIO_TypeDef GPIOB_inst;
+#define CH1 TIM_CHANNEL_1
 
-#define DIR_FWD GPIO_PIN_0
-#define DIR_REV GPIO_PIN_1
-
-// MC_01: Init sets safe state and starts PWM
-void test_MC_01_MotorController_Init_sets_safe_state_and_starts_PWM(void)
+void setUp(void)
 {
-    GPIO_InitTypeDef dummy_init;
-    HAL_GPIO_Init_Expect(GPIOB, &dummy_init); // This will be called, but struct contents not used by Unity/CMock here
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_FWD, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_REV, GPIO_PIN_RESET);
+    // Reset or clear any static/global state if necessary
+    mock_stm32f4xx_hal_Init();
+    mock_position_sensing_Init();
+    // The implementation may rely on static variables;
+    // If needed, call MotorController_Abort() to reset to STOPPED.
+    MotorController_Abort();
+}
+
+void tearDown(void)
+{
+    mock_stm32f4xx_hal_Verify();
+    mock_position_sensing_Verify();
+}
+
+/* === MC_01: Init sets safe state and starts PWM === */
+void test_MotorController_Init_sets_safe_state_and_starts_PWM_MC_01(void)
+{
+    // GPIO Init expectation for both pins
+    GPIO_InitTypeDef expectedInit = {0};
+    expectedInit.Pin   = GPIO_PIN_0 | GPIO_PIN_1;
+    expectedInit.Mode  = GPIO_MODE_OUTPUT_PP;
+    expectedInit.Pull  = GPIO_NOPULL;
+    expectedInit.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init_Expect(GPIOB, &expectedInit);
+
+    // Safe outputs
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
+
+    // PWM start
     HAL_TIM_PWM_Start_Expect(&htim3, TIM_CHANNEL_1);
+
+    // Call
     MotorController_Init();
-    TEST_ASSERT_EQUAL_UINT8(0, MotorController_IsMoving());
+
+    // State checks
     TEST_ASSERT_EQUAL(MOTOR_STATE_STOPPED, MotorController_GetState());
-    uint8_t tgt = 0xFF;
-    TEST_ASSERT_EQUAL(1, MotorController_GetTarget(&tgt));
+    TEST_ASSERT_EQUAL_UINT8(0, MotorController_IsMoving());
+
+    // Target must be 0 and returned correctly when not moving
+    uint8_t tgt = 127;
+    TEST_ASSERT_EQUAL_UINT8(1, MotorController_GetTarget(&tgt));
     TEST_ASSERT_EQUAL_UINT8(0, tgt);
 }
 
-// MC_02: Move forward when current < target
-void test_MC_02_Move_forward_when_current_lt_target_starts_FWD_PWM(void)
+/* === MC_02: Move forward when current < target === */
+void test_MotorController_MoveTo_moves_forward_when_current_lt_target_MC_02(void)
 {
-    uint8_t current = 1;
+    uint8_t fake_current = 1;
+    // GetPosition returns valid, current < target
     PositionSensing_GetPosition_ExpectAnyArgsAndReturn(1);
-    PositionSensing_GetPosition_ReturnThruPtr_pos_out(&current);
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_FWD, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_REV, GPIO_PIN_SET);
+    PositionSensing_GetPosition_ReturnThruPtr_position(&fake_current);
+
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+
     HAL_TIM_PWM_Start_Expect(&htim3, TIM_CHANNEL_1);
+
     MotorController_MoveTo(4);
-    TEST_ASSERT_EQUAL(1, MotorController_IsMoving());
+
+    // After MoveTo, should be moving FWD
     TEST_ASSERT_EQUAL(MOTOR_STATE_MOVING_FWD, MotorController_GetState());
+    TEST_ASSERT_EQUAL_UINT8(1, MotorController_IsMoving());
 }
 
-// MC_03: Move reverse when current > target
-void test_MC_03_Move_reverse_when_current_gt_target_starts_REV_PWM(void)
+/* === MC_03: Move reverse when current > target === */
+void test_MotorController_MoveTo_moves_reverse_when_current_gt_target_MC_03(void)
 {
-    uint8_t current = 5;
+    uint8_t fake_current = 5;
     PositionSensing_GetPosition_ExpectAnyArgsAndReturn(1);
-    PositionSensing_GetPosition_ReturnThruPtr_pos_out(&current);
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_FWD, GPIO_PIN_SET);
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_REV, GPIO_PIN_RESET);
+    PositionSensing_GetPosition_ReturnThruPtr_position(&fake_current);
+
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
+
     HAL_TIM_PWM_Start_Expect(&htim3, TIM_CHANNEL_1);
+
     MotorController_MoveTo(2);
-    TEST_ASSERT_EQUAL(1, MotorController_IsMoving());
+
     TEST_ASSERT_EQUAL(MOTOR_STATE_MOVING_REV, MotorController_GetState());
+    TEST_ASSERT_EQUAL_UINT8(1, MotorController_IsMoving());
 }
 
-// MC_04: No movement when already at target (Abort)
-void test_MC_04_No_movement_when_already_at_target_aborts_and_stops(void)
+/* === MC_04: No movement when already at target (Abort) === */
+void test_MotorController_MoveTo_aborts_if_at_target_MC_04(void)
 {
-    uint8_t current = 3;
+    uint8_t fake_current = 3;
     PositionSensing_GetPosition_ExpectAnyArgsAndReturn(1);
-    PositionSensing_GetPosition_ReturnThruPtr_pos_out(&current);
+    PositionSensing_GetPosition_ReturnThruPtr_position(&fake_current);
 
-    // Should abort: sets output safe
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_FWD, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_REV, GPIO_PIN_RESET);
+    // Abort expected: pins reset, PWM stopped
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
     HAL_TIM_PWM_Stop_Expect(&htim3, TIM_CHANNEL_1);
+
     MotorController_MoveTo(3);
-    TEST_ASSERT_EQUAL(0, MotorController_IsMoving());
+
     TEST_ASSERT_EQUAL(MOTOR_STATE_STOPPED, MotorController_GetState());
+    TEST_ASSERT_EQUAL_UINT8(0, MotorController_IsMoving());
 }
 
-// MC_05: Abort if position invalid at start of MoveTo
-void test_MC_05_Abort_if_position_invalid_on_MoveTo(void)
+/* === MC_05: Abort if current position is invalid at start of MoveTo === */
+void test_MotorController_MoveTo_aborts_if_position_invalid_MC_05(void)
 {
-    PositionSensing_GetPosition_ExpectAnyArgsAndReturn(0);
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_FWD, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_REV, GPIO_PIN_RESET);
+    uint8_t dontcare = 99;
+    PositionSensing_GetPosition_ExpectAnyArgsAndReturn(0); // returns invalid
+
+    // Abort expected: pins reset, PWM stopped
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
     HAL_TIM_PWM_Stop_Expect(&htim3, TIM_CHANNEL_1);
-    MotorController_MoveTo(4);
-    TEST_ASSERT_EQUAL(0, MotorController_IsMoving());
+
+    MotorController_MoveTo(5);
+
     TEST_ASSERT_EQUAL(MOTOR_STATE_STOPPED, MotorController_GetState());
+    TEST_ASSERT_EQUAL_UINT8(0, MotorController_IsMoving());
 }
 
-// MC_06: Update does nothing when motor not moving
-void test_MC_06_Update_does_nothing_when_motor_not_moving(void)
+/* === MC_06: Update does nothing when motor not moving === */
+void test_MotorController_Update_does_nothing_if_not_moving_MC_06(void)
 {
-    // No movement_active; update should do nothing: No PositionSensing or HAL calls
-    MotorController_Init();
+    // Ensure stopped/not moving state
+    MotorController_Abort();
+    // No calls to PositionSensing_* or GPIO/TIM expected in Update.
+
     MotorController_Update();
+
+    // Still not moving
     TEST_ASSERT_EQUAL_UINT8(0, MotorController_IsMoving());
     TEST_ASSERT_EQUAL(MOTOR_STATE_STOPPED, MotorController_GetState());
 }
 
-// MC_07: While moving, if GetPosition becomes invalid, abort called
-void test_MC_07_Update_aborts_if_GetPosition_invalid_while_moving(void)
+/* === MC_07: Update aborts if GetPosition returns invalid while moving === */
+void test_MotorController_Update_aborts_if_position_invalid_while_moving_MC_07(void)
 {
-    // Set up state: start movement active
-    // Should call PositionSensing_Update, PositionSensing_GetPosition (returns 0)
+    // Move first, then simulate Update
+    uint8_t current = 2;
+    PositionSensing_GetPosition_ExpectAnyArgsAndReturn(1);
+    PositionSensing_GetPosition_ReturnThruPtr_position(&current);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+    HAL_TIM_PWM_Start_Expect(&htim3, TIM_CHANNEL_1);
+    MotorController_MoveTo(4);
+
+    // Update: PositionSensing_Update called, then GetPosition returns invalid
     PositionSensing_Update_Expect();
     PositionSensing_GetPosition_ExpectAnyArgsAndReturn(0);
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_FWD, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_REV, GPIO_PIN_RESET);
+
+    // On abort
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
     HAL_TIM_PWM_Stop_Expect(&htim3, TIM_CHANNEL_1);
-    // Fake movement active flag
-    extern void set_motor_movement_active(uint8_t);
-    set_motor_movement_active(1);
+
     MotorController_Update();
-    TEST_ASSERT_EQUAL(0, MotorController_IsMoving());
+
     TEST_ASSERT_EQUAL(MOTOR_STATE_STOPPED, MotorController_GetState());
+    TEST_ASSERT_EQUAL_UINT8(0, MotorController_IsMoving());
 }
 
-// MC_08: While moving, stop when target reached using IsAtTarget
-void test_MC_08_Update_aborts_when_IsAtTarget_returns_1(void)
+/* === MC_08: Update aborts if IsAtTarget returns 1 while moving === */
+void test_MotorController_Update_aborts_if_IsAtTarget_returns_1_MC_08(void)
 {
-    PositionSensing_Update_Expect();
-    uint8_t dummy = 1;
+    // Move first, then simulate Update at target
+    uint8_t current = 2;
+    uint8_t target = 4;
     PositionSensing_GetPosition_ExpectAnyArgsAndReturn(1);
-    PositionSensing_GetPosition_ReturnThruPtr_pos_out(&dummy);
-    PositionSensing_IsAtTarget_ExpectAndReturn(4, 1);
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_FWD, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_REV, GPIO_PIN_RESET);
+    PositionSensing_GetPosition_ReturnThruPtr_position(&current);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+    HAL_TIM_PWM_Start_Expect(&htim3, TIM_CHANNEL_1);
+    MotorController_MoveTo(target);
+
+    // Update: PositionSensing_Update called, GetPosition valid, IsAtTarget==1
+    PositionSensing_Update_Expect();
+    PositionSensing_GetPosition_ExpectAnyArgsAndReturn(1);
+    PositionSensing_GetPosition_ReturnThruPtr_position(&current);
+    PositionSensing_IsAtTarget_ExpectAndReturn(target, 1);
+
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
     HAL_TIM_PWM_Stop_Expect(&htim3, TIM_CHANNEL_1);
-    extern void set_motor_state_for_update(uint8_t target, uint8_t active);
-    set_motor_state_for_update(4, 1);
+
     MotorController_Update();
-    TEST_ASSERT_EQUAL(0, MotorController_IsMoving());
+
     TEST_ASSERT_EQUAL(MOTOR_STATE_STOPPED, MotorController_GetState());
+    TEST_ASSERT_EQUAL_UINT8(0, MotorController_IsMoving());
 }
 
-// MC_09: While moving, continue if not at target
-void test_MC_09_MotorController_Update_continues_when_not_at_target(void)
+/* === MC_09: Update continues moving if not at target and position valid === */
+void test_MotorController_Update_continues_moving_if_not_at_target_MC_09(void)
 {
-    PositionSensing_Update_Expect();
-    uint8_t dummy = 2;
+    // Move first, then simulate Update not yet at target
+    uint8_t current = 2;
+    uint8_t target = 4;
     PositionSensing_GetPosition_ExpectAnyArgsAndReturn(1);
-    PositionSensing_GetPosition_ReturnThruPtr_pos_out(&dummy);
-    PositionSensing_IsAtTarget_ExpectAndReturn(4, 0);
-    extern void set_motor_state_for_update(uint8_t target, uint8_t active);
-    set_motor_state_for_update(4, 1);
+    PositionSensing_GetPosition_ReturnThruPtr_position(&current);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+    HAL_TIM_PWM_Start_Expect(&htim3, TIM_CHANNEL_1);
+    MotorController_MoveTo(target);
+
+    // Update: PositionSensing_Update called, GetPosition valid, IsAtTarget==0
+    PositionSensing_Update_Expect();
+    PositionSensing_GetPosition_ExpectAnyArgsAndReturn(1);
+    PositionSensing_GetPosition_ReturnThruPtr_position(&current);
+    PositionSensing_IsAtTarget_ExpectAndReturn(target, 0);
+
     MotorController_Update();
-    TEST_ASSERT_EQUAL(1, MotorController_IsMoving());
+
+    // No abort, should still be moving
+    TEST_ASSERT_EQUAL_UINT8(1, MotorController_IsMoving());
 }
 
-// MC_10: Abort sets safe outputs and stops PWM
-void test_MC_10_Abort_stops_PWM_and_safes_GPIO(void)
+/* === MC_10: Abort sets safe outputs and stops PWM === */
+void test_MotorController_Abort_sets_safe_outputs_and_stops_PWM_MC_10(void)
 {
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_FWD, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin_Expect(GPIOB, DIR_REV, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
     HAL_TIM_PWM_Stop_Expect(&htim3, TIM_CHANNEL_1);
+
     MotorController_Abort();
-    TEST_ASSERT_EQUAL(0, MotorController_IsMoving());
+
+    TEST_ASSERT_EQUAL(MOTOR_STATE_STOPPED, MotorController_GetState());
+    TEST_ASSERT_EQUAL_UINT8(0, MotorController_IsMoving());
 }
 
-// MC_11: GetTarget returns target if stopped and ptr valid
-void test_MC_11_GetTarget_returns_target_when_stopped_and_ptr_valid(void)
+/* === MC_11: GetTarget returns value when stopped and target < 6, pointer valid === */
+void test_MotorController_GetTarget_returns_target_when_stopped_and_valid_MC_11(void)
 {
-    MotorController_Init();
-    MotorController_MoveTo(2); // Now stopped state & target=2
+    // Set state: stopped, s_target_position to 2
     MotorController_Abort();
-    uint8_t tgt = 0xFF;
-    TEST_ASSERT_EQUAL(1, MotorController_GetTarget(&tgt));
+
+    // Move to 2, position valid but don't actually move (simulate abort)
+    uint8_t fake_current = 2;
+    PositionSensing_GetPosition_ExpectAnyArgsAndReturn(1);
+    PositionSensing_GetPosition_ReturnThruPtr_position(&fake_current);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
+    HAL_TIM_PWM_Stop_Expect(&htim3, TIM_CHANNEL_1);
+    MotorController_MoveTo(2);
+
+    uint8_t tgt = 0;
+    TEST_ASSERT_EQUAL_UINT8(1, MotorController_GetTarget(&tgt));
     TEST_ASSERT_EQUAL_UINT8(2, tgt);
 }
 
-// MC_12: GetTarget returns 0 when moving
-void test_MC_12_GetTarget_returns_0_when_moving(void)
+/* === MC_12: GetTarget returns 0 when moving === */
+void test_MotorController_GetTarget_returns_0_when_moving_MC_12(void)
 {
-    MotorController_Init();
-    // Begin "move": active=1
-    // Set state to moving, so GetTarget returns 0 [no need for direction]
-    extern void set_motor_movement_active(uint8_t);
-    set_motor_movement_active(1);
-    uint8_t tgt = 0xFF;
-    TEST_ASSERT_EQUAL(0, MotorController_GetTarget(&tgt));
+    // Start a move so movement_active=1
+    uint8_t fake_current = 1;
+    PositionSensing_GetPosition_ExpectAnyArgsAndReturn(1);
+    PositionSensing_GetPosition_ReturnThruPtr_position(&fake_current);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+    HAL_TIM_PWM_Start_Expect(&htim3, TIM_CHANNEL_1);
+    MotorController_MoveTo(4);
+
+    uint8_t tgt = 42;
+    TEST_ASSERT_EQUAL_UINT8(0, MotorController_GetTarget(&tgt));
 }
 
-// MC_13: GetTarget returns 0 on NULL pointer
-void test_MC_13_GetTarget_returns_0_on_NULL_ptr(void)
+/* === MC_13: GetTarget returns 0 on NULL pointer === */
+void test_MotorController_GetTarget_returns_0_on_null_pointer_MC_13(void)
 {
-    MotorController_Init();
     MotorController_Abort();
-    TEST_ASSERT_EQUAL(0, MotorController_GetTarget(NULL));
+    TEST_ASSERT_EQUAL_UINT8(0, MotorController_GetTarget(NULL));
 }
 
-// MC_14: GetTarget returns 0 if stored target out of range (>=6)
-void test_MC_14_GetTarget_returns_0_if_target_is_invalid(void)
+/* === MC_14: GetTarget returns 0 when stored target is out of range (>=6) === */
+void test_MotorController_GetTarget_returns_0_when_target_out_of_range_MC_14(void)
 {
-    extern void set_motor_target_value(uint8_t);
-    MotorController_Init();
-    set_motor_target_value(6);
-    MotorController_Abort();
+    // Simulate out-of-range by calling MoveTo(6) with invalid position to abort but leave s_target_position=6
+    PositionSensing_GetPosition_ExpectAnyArgsAndReturn(0);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin_Expect(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
+    HAL_TIM_PWM_Stop_Expect(&htim3, TIM_CHANNEL_1);
+    MotorController_MoveTo(6);
+
     uint8_t tgt = 0xFF;
-    TEST_ASSERT_EQUAL(0, MotorController_GetTarget(&tgt));
+    TEST_ASSERT_EQUAL_UINT8(0, MotorController_GetTarget(&tgt));
 }
