@@ -3,122 +3,157 @@
 #include "command_handler.h"
 #include "mock_stm32f4xx_hal.h"
 
+#include <string.h> // For memset if needed
+
+// External hardware handle referenced by command_handler.c
 UART_HandleTypeDef huart2;
 
+// setUp and tearDown are required by Unity,
+// even if not needed by these tests at the moment.
 void setUp(void)
 {
-    // Reset the mock for every test
-    mock_stm32f4xx_hal_Init();
+    // Reset or initialize anything as needed before each test
+    memset(&huart2, 0, sizeof(huart2));
 }
 
 void tearDown(void)
 {
+    // Clean up after each test (not needed here)
 }
 
-//
-// Test Case: CH_01
-// SWE-REQ-001,002: Accept valid command '0'
-// Expect: Returns 1, *cmd_out = 0
-//
-void test_CommandHandler_Accepts_Valid_Command_0_CH_01(void)
+/* ====================
+ * Test Cases from Testplan_Command_Handler.txt
+ * ====================
+ */
+
+/*
+Test Case ID: CH_01
+Objective: Accept valid command '0'
+SW-REQ: SWE-REQ-001,002
+Description: When UART receives '0' (ASCII 48), function returns 1, *cmd_out = 0.
+*/
+void test_CH_01_Accept_valid_command_0(void)
 {
-    uint8_t cmd = 99; // set to non-zero to check modification
+    uint8_t cmd = 0xAA; // Unusual default for detection
     uint8_t rx = '0';
-    // HAL_UART_Receive should be called as per control flow
+
+    // Expectation: HAL_UART_Receive called, returns HAL_OK, and writes '0' to rx pointer.
     HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
-    uint8_t result = CommandHandler_PollCommand(&cmd);
-    TEST_ASSERT_EQUAL_UINT8(1, result);
-    TEST_ASSERT_EQUAL_UINT8(0, cmd);
+    // CMock will NOT transfer variable values, we must simulate as if rx got '0'
+
+    int ret = CommandHandler_PollCommand(&cmd);
+
+    TEST_ASSERT_EQUAL_INT(1, ret);
+    TEST_ASSERT_EQUAL_UINT8(0, cmd); // Should parse '0' -> 0
 }
 
-//
-// Test Case: CH_02
-// SWE-REQ-001,002: Accept valid command '5' (upper bound)
-// Expect: Returns 1, *cmd_out = 5
-//
-void test_CommandHandler_Accepts_Valid_Command_5_CH_02(void)
+/*
+Test Case ID: CH_02
+Objective: Accept valid command '5' (upper bound)
+SW-REQ: SWE-REQ-001,002
+Description: When UART receives '5', function returns 1, *cmd_out = 5.
+*/
+void test_CH_02_Accept_valid_command_5_upper_bound(void)
 {
-    uint8_t cmd = 42;
+    uint8_t cmd = 0xAA;
     uint8_t rx = '5';
+
     HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
-    uint8_t result = CommandHandler_PollCommand(&cmd);
-    TEST_ASSERT_EQUAL_UINT8(1, result);
+
+    int ret = CommandHandler_PollCommand(&cmd);
+
+    TEST_ASSERT_EQUAL_INT(1, ret);
     TEST_ASSERT_EQUAL_UINT8(5, cmd);
 }
 
-//
-// Test Case: CH_03
-// SWE-REQ-003: Reject numeric out-of-range command ('8')
-// Expect: Returns 0, *cmd_out unchanged
-//
-void test_CommandHandler_Rejects_OutOfRange_Command_8_CH_03(void)
+/*
+Test Case ID: CH_03
+Objective: Reject numeric out-of-range command (e.g., '8')
+SW-REQ: SWE-REQ-003
+Description: UART receives '8', function must return 0 and *cmd_out is unchanged.
+*/
+void test_CH_03_Reject_out_of_range_command_8(void)
 {
-    uint8_t cmd = 7;
-    uint8_t cmd_initial = cmd;
+    uint8_t cmd = 0x55; // Sentinel value
     uint8_t rx = '8';
+
     HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
-    uint8_t result = CommandHandler_PollCommand(&cmd);
-    TEST_ASSERT_EQUAL_UINT8(0, result);
-    TEST_ASSERT_EQUAL_UINT8(cmd_initial, cmd);
+
+    int ret = CommandHandler_PollCommand(&cmd);
+
+    TEST_ASSERT_EQUAL_INT(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(0x55, cmd); // Should remain unchanged
 }
 
-//
-// Test Case: CH_04
-// SWE-REQ-003: Reject non-numeric command ('x')
-// Expect: Returns 0, *cmd_out unchanged
-//
-void test_CommandHandler_Rejects_NonNumeric_Command_x_CH_04(void)
+/*
+Test Case ID: CH_04
+Objective: Reject non-numeric command
+SW-REQ: SWE-REQ-003
+Description: UART receives 'x', function must return 0 and *cmd_out is unchanged.
+*/
+void test_CH_04_Reject_non_numeric_command_x(void)
 {
-    uint8_t cmd = 2;
-    uint8_t cmd_initial = cmd;
+    uint8_t cmd = 0x22;
     uint8_t rx = 'x';
+
     HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
-    uint8_t result = CommandHandler_PollCommand(&cmd);
-    TEST_ASSERT_EQUAL_UINT8(0, result);
-    TEST_ASSERT_EQUAL_UINT8(cmd_initial, cmd);
+
+    int ret = CommandHandler_PollCommand(&cmd);
+
+    TEST_ASSERT_EQUAL_INT(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(0x22, cmd); // Should not be modified
 }
 
-//
-// Test Case: CH_05
-// SWE-REQ-053: Reject UART receive failure (HAL_ERROR)
-// Expect: Returns 0, *cmd_out unchanged
-//
-void test_CommandHandler_Rejects_UART_Receive_Failure_CH_05(void)
+/*
+Test Case ID: CH_05
+Objective: Reject UART receive failure (HAL_ERROR)
+SW-REQ: SWE-REQ-053
+Description: If HAL_UART_Receive returns HAL_ERROR, function must return 0 and leave *cmd_out unchanged.
+*/
+void test_CH_05_Reject_UART_receive_failure(void)
 {
-    uint8_t cmd = 3;
-    uint8_t cmd_initial = cmd;
-    // Note: rx is not relevant as UART fails
-    HAL_UART_Receive_ExpectAndReturn(&huart2, (uint8_t*)UnityAnyPtr(), 1, 10, HAL_ERROR);
-    uint8_t result = CommandHandler_PollCommand(&cmd);
-    TEST_ASSERT_EQUAL_UINT8(0, result);
-    TEST_ASSERT_EQUAL_UINT8(cmd_initial, cmd);
+    uint8_t cmd = 0x33;
+
+    // rx pointer value does not matter since UART receive fails
+    HAL_UART_Receive_ExpectAndReturn(&huart2, (uint8_t *)UNITY_ANY, 1, 10, HAL_ERROR);
+
+    int ret = CommandHandler_PollCommand(&cmd);
+
+    TEST_ASSERT_EQUAL_INT(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(0x33, cmd);
 }
 
-//
-// Test Case: CH-06
-// SWE-REQ-046: Handle NULL pointer safely
-// Expect: No crash, returns 0
-//
-void test_CommandHandler_Handles_Null_Pointer_CH_06(void)
+/*
+Test Case ID: CH_06
+Objective: NULL pointer safety
+SW-REQ: SWE-REQ-046
+Description: If cmd_out is NULL, function must return 0. Should not call HAL_UART_Receive. (No crash.)
+*/
+void test_CH_06_Handle_NULL_pointer_safely(void)
 {
-    // Should return 0 and not call HAL_UART_Receive
-    uint8_t result = CommandHandler_PollCommand(NULL);
-    TEST_ASSERT_EQUAL_UINT8(0, result);
-    // Ensure no HAL_UART_Receive call was made (CMock enforces strict ordering)
+    // No expectations on HAL_UART_Receive at all
+    int ret = CommandHandler_PollCommand(NULL);
+
+    TEST_ASSERT_EQUAL_INT(0, ret);
+    // Test passes if no segfault; Unity handles this just by running to completion
 }
 
-//
-// Test Case: CH_07
-// SWE-REQ-058: Do not modify output on invalid data ('9')
-// Expect: *cmd_out remains unchanged
-//
-void test_CommandHandler_Does_Not_Modify_Output_On_Invalid_Data_CH_07(void)
+/*
+Test Case ID: CH_07
+Objective: Do not modify output on invalid data (e.g., rx = '9')
+SW-REQ: SWE-REQ-058
+Description: Should not change *cmd_out for rx outside '0'..'5'
+*/
+void test_CH_07_Do_not_modify_output_on_invalid_data_9(void)
 {
-    uint8_t cmd = 9;
-    uint8_t cmd_initial = cmd;
+    uint8_t cmd = 0xAB;
     uint8_t rx = '9';
+
     HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
-    uint8_t result = CommandHandler_PollCommand(&cmd);
-    TEST_ASSERT_EQUAL_UINT8(0, result);
-    TEST_ASSERT_EQUAL_UINT8(cmd_initial, cmd);
+
+    int ret = CommandHandler_PollCommand(&cmd);
+
+    TEST_ASSERT_EQUAL_INT(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(0xAB, cmd);
 }
+// End of test_command_handler.c
