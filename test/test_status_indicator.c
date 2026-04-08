@@ -3,17 +3,19 @@
 #include "status_indicator.h"
 #include "mock_stm32f4xx_hal.h"
 
-GPIO_TypeDef GPIOC_inst;
-GPIO_TypeDef *GPIOC = &GPIOC_inst;
-
 void setUp(void) {}
 void tearDown(void) {}
 
 /* SI_01: Power LED turns ON after init */
 void test_status_indicator_SI_01(void)
 {
-    GPIO_InitTypeDef argStruct;
-    HAL_GPIO_Init_Expect(GPIOC, &argStruct);
+    GPIO_InitTypeDef expected_init;
+    expected_init.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5;
+    expected_init.Mode = GPIO_MODE_OUTPUT_PP;
+    expected_init.Pull = GPIO_NOPULL;
+    expected_init.Speed = GPIO_SPEED_FREQ_LOW;
+
+    HAL_GPIO_Init_Expect(GPIOC, &expected_init);
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_0, GPIO_PIN_SET);
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
@@ -49,7 +51,7 @@ void test_status_indicator_SI_03(void)
     StatusIndicator_Update(1, 5);
 }
 
-/* SI_04: Invalid position → all OFF */
+/* SI_04: Invalid position  all OFF */
 void test_status_indicator_SI_04(void)
 {
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
@@ -71,7 +73,7 @@ void test_status_indicator_SI_05(void)
     StatusIndicator_SetPowerLED(1);
 }
 
-/* SI_06: Boundary out-of-range (pos=6) → all OFF */
+/* SI_06: Boundary out-of-range (pos=6)  all OFF */
 void test_status_indicator_SI_06(void)
 {
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
