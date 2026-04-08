@@ -3,13 +3,17 @@
 #include "status_indicator.h"
 #include "mock_stm32f4xx_hal.h"
 
+GPIO_TypeDef GPIOC_inst;
+GPIO_TypeDef *GPIOC = &GPIOC_inst;
+
 void setUp(void) {}
 void tearDown(void) {}
 
-/* SI_01: SWE-REQ-025 */
+/* SI_01: Power LED turns ON after init */
 void test_status_indicator_SI_01(void)
 {
-    HAL_GPIO_Init_Ignore();
+    GPIO_InitTypeDef argStruct;
+    HAL_GPIO_Init_Expect(GPIOC, &argStruct);
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_0, GPIO_PIN_SET);
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
@@ -20,7 +24,7 @@ void test_status_indicator_SI_01(void)
     StatusIndicator_Init();
 }
 
-/* SI_02: SWE-REQ-026 */
+/* SI_02: Position 0 shows no green LED */
 void test_status_indicator_SI_02(void)
 {
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
@@ -32,7 +36,7 @@ void test_status_indicator_SI_02(void)
     StatusIndicator_Update(1, 0);
 }
 
-/* SI_03: SWE-REQ-027 */
+/* SI_03: Display position 5 */
 void test_status_indicator_SI_03(void)
 {
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
@@ -45,7 +49,7 @@ void test_status_indicator_SI_03(void)
     StatusIndicator_Update(1, 5);
 }
 
-/* SI_04: SWE-REQ-029 */
+/* SI_04: Invalid position → all OFF */
 void test_status_indicator_SI_04(void)
 {
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
@@ -57,16 +61,17 @@ void test_status_indicator_SI_04(void)
     StatusIndicator_Update(0, 0xFF);
 }
 
-/* SI_05: SWE-REQ-044 */
+/* SI_05: Power LED software control */
 void test_status_indicator_SI_05(void)
 {
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET);
-    StatusIndicator_SetPowerLED(0);
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_0, GPIO_PIN_SET);
+
+    StatusIndicator_SetPowerLED(0);
     StatusIndicator_SetPowerLED(1);
 }
 
-/* SI_06: SWE-REQ-024 */
+/* SI_06: Boundary out-of-range (pos=6) → all OFF */
 void test_status_indicator_SI_06(void)
 {
     HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
@@ -77,4 +82,3 @@ void test_status_indicator_SI_06(void)
 
     StatusIndicator_Update(1, 6);
 }
-
