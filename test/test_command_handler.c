@@ -1,158 +1,123 @@
+/* ===== test_command_handler.c ===== */
 #include "unity.h"
 #include "command_handler.h"
-
-/* Ceedling will auto-generate this mock */
 #include "mock_stm32f4xx_hal.h"
 
-/* Fake UART handle required by SUT */
-UART_HandleTypeDef huart2;
+void setUp(void) {}
+void tearDown(void) {}
 
-static uint8_t g_rx = '0';
-static HAL_StatusTypeDef g_status = HAL_OK;
-
-/* =========================
- * Test Lifecycle Hooks
- * ========================= */
-void setUp(void)
+/* Test Case: CH_01 */
+void test_command_handler_CH_01(void)
 {
-}
+    uint8_t cmd = 99;
+    UART_HandleTypeDef huart2_dummy;
+    extern UART_HandleTypeDef huart2;
+    huart2 = huart2_dummy;
 
-void tearDown(void)
-{
-}
+    /* Expectation: HAL_UART_Receive returns HAL_OK, rx = '0' */
+    uint8_t rx_value = '0';
+    HAL_UART_Receive_ExpectAndReturn(&huart2, &rx_value, 1, 10, HAL_OK);
 
-
-static HAL_StatusTypeDef HAL_UART_Receive_Callback(
-    UART_HandleTypeDef *huart,
-    uint8_t *pData,
-    uint16_t Size,
-    uint32_t Timeout,
-    int cmock_num_calls
-)
-{
-    if (g_status == HAL_OK)
-    {
-        *pData = g_rx;   /* simulate UART receiving a byte */
-    }
-    return g_status;
-}
-
-/* =========================
- * CH-01
- * Accept valid command '0'
- * ========================= */
-void test_CommandHandler_Accepts_Zero(void)
-{
-    uint8_t cmd = 0xFF;
-    
-    g_rx = '0';
-    g_status = HAL_OK;
-    HAL_UART_Receive_StubWithCallback(HAL_UART_Receive_Callback);
-
-   
-    uint8_t ret = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(1, ret);
+    uint8_t result = CommandHandler_PollCommand(&cmd);
+    TEST_ASSERT_EQUAL_UINT8(1, result);
     TEST_ASSERT_EQUAL_UINT8(0, cmd);
 }
 
-/* =========================
- * CH_02
- * Accept valid command '5' (upper bound)
- * ========================= */
-void test_CommandHandler_Accepts_Five(void)
+/* Test Case: CH_02 */
+void test_command_handler_CH_02(void)
 {
-    uint8_t cmd = 0xFF;
+    uint8_t cmd = 99;
+    UART_HandleTypeDef huart2_dummy;
+    extern UART_HandleTypeDef huart2;
+    huart2 = huart2_dummy;
 
-    g_rx = '5';
-    g_status = HAL_OK;
-    HAL_UART_Receive_StubWithCallback(HAL_UART_Receive_Callback);
+    /* Expectation: HAL_UART_Receive returns HAL_OK, rx = '5' */
+    uint8_t rx_value = '5';
+    HAL_UART_Receive_ExpectAndReturn(&huart2, &rx_value, 1, 10, HAL_OK);
 
-    uint8_t ret = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(1, ret);
+    uint8_t result = CommandHandler_PollCommand(&cmd);
+    TEST_ASSERT_EQUAL_UINT8(1, result);
     TEST_ASSERT_EQUAL_UINT8(5, cmd);
 }
 
-/* =========================
- * CH_03
- * Reject numeric out-of-range command
- * ========================= */
-void test_CommandHandler_Rejects_OutOfRange_Command(void)
+/* Test Case: CH_03 */
+void test_command_handler_CH_03(void)
 {
-    uint8_t cmd = 0xFF;
+    uint8_t cmd = 55;
+    UART_HandleTypeDef huart2_dummy;
+    extern UART_HandleTypeDef huart2;
+    huart2 = huart2_dummy;
 
-    g_rx = '8';
-    g_status = HAL_OK;
-    HAL_UART_Receive_StubWithCallback(HAL_UART_Receive_Callback);
+    /* Expectation: HAL_UART_Receive returns HAL_OK, rx = '8' (out of range) */
+    uint8_t rx_value = '8';
+    HAL_UART_Receive_ExpectAndReturn(&huart2, &rx_value, 1, 10, HAL_OK);
 
-    uint8_t ret = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
-    TEST_ASSERT_EQUAL_UINT8(0xFF, cmd); /* unchanged */
+    uint8_t result = CommandHandler_PollCommand(&cmd);
+    TEST_ASSERT_EQUAL_UINT8(0, result);
+    TEST_ASSERT_EQUAL_UINT8(55, cmd); // unchanged
 }
 
-/* =========================
- * CH_04
- * Reject non-numeric command
- * ========================= */
-void test_CommandHandler_Rejects_NonNumeric_Command(void)
+/* Test Case: CH_04 */
+void test_command_handler_CH_04(void)
 {
-    uint8_t cmd = 0xFF;
+    uint8_t cmd = 44;
+    UART_HandleTypeDef huart2_dummy;
+    extern UART_HandleTypeDef huart2;
+    huart2 = huart2_dummy;
 
-    g_rx = 'x';
-    g_status = HAL_OK;
-    HAL_UART_Receive_StubWithCallback(HAL_UART_Receive_Callback);
+    /* Expectation: HAL_UART_Receive returns HAL_OK, rx = non-numeric 'x' */
+    uint8_t rx_value = 'x';
+    HAL_UART_Receive_ExpectAndReturn(&huart2, &rx_value, 1, 10, HAL_OK);
 
-    uint8_t ret = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
-    TEST_ASSERT_EQUAL_UINT8(0xFF, cmd); /* unchanged */
+    uint8_t result = CommandHandler_PollCommand(&cmd);
+    TEST_ASSERT_EQUAL_UINT8(0, result);
+    TEST_ASSERT_EQUAL_UINT8(44, cmd); // unchanged
 }
 
-/* =========================
- * CH_05
- * Reject UART receive failure
- * ========================= */
-void test_CommandHandler_Rejects_Uart_Receive_Failure(void)
+/* Test Case: CH_05 */
+void test_command_handler_CH_05(void)
 {
-    uint8_t cmd = 0xFF;
+    uint8_t cmd = 11;
+    UART_HandleTypeDef huart2_dummy;
+    extern UART_HandleTypeDef huart2;
+    huart2 = huart2_dummy;
 
-    g_status = HAL_ERROR;
-    HAL_UART_Receive_StubWithCallback(HAL_UART_Receive_Callback);
+    /* Expectation: HAL_UART_Receive returns HAL_ERROR */
+    uint8_t rx_value = 0x00;
+    HAL_UART_Receive_ExpectAndReturn(&huart2, &rx_value, 1, 10, HAL_ERROR);
 
-    uint8_t ret = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
-    TEST_ASSERT_EQUAL_UINT8(0xFF, cmd); /* unchanged */
+    uint8_t result = CommandHandler_PollCommand(&cmd);
+    TEST_ASSERT_EQUAL_UINT8(0, result);
+    TEST_ASSERT_EQUAL_UINT8(11, cmd); // unchanged
 }
 
-/* =========================
- * CH_06
- * Handle NULL pointer safely
- * ========================= */
-void test_CommandHandler_Null_Pointer_Protected(void)
+/* Test Case: CH-06 */
+void test_command_handler_CH_06(void)
 {
-    /* No stub needed: function returns before calling HAL_UART_Receive */
-    uint8_t ret = CommandHandler_PollCommand(NULL);
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
+    /* NULL pointer test for cmd_out */
+    UART_HandleTypeDef huart2_dummy;
+    extern UART_HandleTypeDef huart2;
+    huart2 = huart2_dummy;
+
+    uint8_t result = CommandHandler_PollCommand(NULL);
+    TEST_ASSERT_EQUAL_UINT8(0, result);
 }
 
-/* =========================
- * CH_07
- * Do not modify output on invalid data
- * ========================= */
-void test_CommandHandler_DoesNot_Modify_Output_On_Invalid_Data(void)
+/* Test Case: CH_07 */
+void test_command_handler_CH_07(void)
 {
-    uint8_t cmd = 0xAA;
+    uint8_t cmd = 99;
+    UART_HandleTypeDef huart2_dummy;
+    extern UART_HandleTypeDef huart2;
+    huart2 = huart2_dummy;
 
-    g_rx = '9';
-    g_status = HAL_OK;
-    HAL_UART_Receive_StubWithCallback(HAL_UART_Receive_Callback);
+    /* Expectation: HAL_UART_Receive returns HAL_OK, rx = '9' (invalid/out-of-range) */
+    uint8_t rx_value = '9';
+    HAL_UART_Receive_ExpectAndReturn(&huart2, &rx_value, 1, 10, HAL_OK);
 
-    uint8_t ret = CommandHandler_PollCommand(&cmd);
+    uint8_t previous_cmd = cmd;
+    uint8_t result = CommandHandler_PollCommand(&cmd);
 
-    TEST_ASSERT_EQUAL_UINT8(0, ret);
-    TEST_ASSERT_EQUAL_UINT8(0xAA, cmd); /* unchanged */
+    TEST_ASSERT_EQUAL_UINT8(0, result);
+    TEST_ASSERT_EQUAL_UINT8(previous_cmd, cmd); // unchanged
 }
-
