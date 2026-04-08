@@ -8,88 +8,92 @@ void tearDown(void) {}
 
 void test_command_handler_CH_01(void)
 {
-    uint8_t cmd = 0xFF;
-    uint8_t rx = '0';
+    UART_HandleTypeDef dummy_uart;
     extern UART_HandleTypeDef huart2;
+    huart2 = dummy_uart;
+    uint8_t output = 99;
+    uint8_t expected = 0;
+    uint8_t rx = '0';
     HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&rx, 1);
 
-    uint8_t result = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(1, result);
-    TEST_ASSERT_EQUAL_UINT8(0, cmd); // '0' - '0' = 0
+    int ret = CommandHandler_PollCommand(&output);
+    TEST_ASSERT_EQUAL(1, ret);
+    TEST_ASSERT_EQUAL_UINT8(0, output);
 }
 
 void test_command_handler_CH_02(void)
 {
-    uint8_t cmd = 0xFF;
-    uint8_t rx = '5';
+    UART_HandleTypeDef dummy_uart;
     extern UART_HandleTypeDef huart2;
+    huart2 = dummy_uart;
+    uint8_t output = 99;
+    uint8_t expected = 5;
+    uint8_t rx = '5';
     HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&rx, 1);
 
-    uint8_t result = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(1, result);
-    TEST_ASSERT_EQUAL_UINT8(5, cmd); // '5' - '0' = 5
+    int ret = CommandHandler_PollCommand(&output);
+    TEST_ASSERT_EQUAL(1, ret);
+    TEST_ASSERT_EQUAL_UINT8(5, output);
 }
 
 void test_command_handler_CH_03(void)
 {
-    uint8_t cmd = 42; // unchanged value
-    uint8_t rx = '8';
+    UART_HandleTypeDef dummy_uart;
     extern UART_HandleTypeDef huart2;
+    huart2 = dummy_uart;
+    uint8_t output = 42;
+    uint8_t rx = '8';
     HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&rx, 1);
 
-    uint8_t result = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(0, result);
-    TEST_ASSERT_EQUAL_UINT8(42, cmd); // unchanged
+    int ret = CommandHandler_PollCommand(&output);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(42, output);
 }
 
 void test_command_handler_CH_04(void)
 {
-    uint8_t cmd = 55; // unchanged value
-    uint8_t rx = 'x';
+    UART_HandleTypeDef dummy_uart;
     extern UART_HandleTypeDef huart2;
+    huart2 = dummy_uart;
+    uint8_t output = 7;
+    uint8_t rx = 'x';
     HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&rx, 1);
 
-    uint8_t result = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(0, result);
-    TEST_ASSERT_EQUAL_UINT8(55, cmd); // unchanged
+    int ret = CommandHandler_PollCommand(&output);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(7, output);
 }
 
 void test_command_handler_CH_05(void)
 {
-    uint8_t cmd = 99; // unchanged value
-    uint8_t rx = 0x00;
+    UART_HandleTypeDef dummy_uart;
     extern UART_HandleTypeDef huart2;
-    HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_ERROR);
+    huart2 = dummy_uart;
+    uint8_t output = 9;
+    HAL_UART_Receive_ExpectAndReturn(&huart2, &output, 1, 10, HAL_ERROR);
 
-    uint8_t result = CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(0, result);
-    TEST_ASSERT_EQUAL_UINT8(99, cmd); // unchanged
+    int ret = CommandHandler_PollCommand(&output);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(9, output);
 }
 
 void test_command_handler_CH_06(void)
 {
-    uint8_t result = CommandHandler_PollCommand(NULL);
-    TEST_ASSERT_EQUAL_UINT8(0, result);
+    // CH-06: cmd_out = NULL, ensure no crash
+    int ret = CommandHandler_PollCommand(NULL);
+    TEST_ASSERT_EQUAL(0, ret);
 }
 
 void test_command_handler_CH_07(void)
 {
-    uint8_t cmd = 7; // initial value
-    uint8_t rx = '9';
+    UART_HandleTypeDef dummy_uart;
     extern UART_HandleTypeDef huart2;
+    huart2 = dummy_uart;
+    uint8_t output = 77;
+    uint8_t rx = '9';
     HAL_UART_Receive_ExpectAndReturn(&huart2, &rx, 1, 10, HAL_OK);
-    HAL_UART_Receive_ReturnArrayThruPtr_pData(&rx, 1);
 
-    (void)CommandHandler_PollCommand(&cmd);
-
-    TEST_ASSERT_EQUAL_UINT8(7, cmd); // unchanged
+    int ret = CommandHandler_PollCommand(&output);
+    TEST_ASSERT_EQUAL(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(77, output);
 }
