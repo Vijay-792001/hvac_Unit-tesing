@@ -1,0 +1,15 @@
+Test Case ID	SW-REQ(s)	Objective	Preconditions	Input (Mocked ADC)	Expected Result	Pass / Fail Criteria
+PS_01	SWE-REQ-040	Init resets internal state (invalid + not valid)	None	Init()	PositionSensing_IsValid()=0, PositionSensing_GetPosition()=0 (pos unchanged)	IsValid returns 0 AND GetPosition returns 0
+PS_02	SWE-REQ-019	PositionSensing_GetPosition() rejects NULL pointer	Init done	GetPosition(NULL)	Return=0	Return=0
+PS_03	SWE-REQ-018	Update sets valid when ADC poll OK	Init done	Poll=HAL_OK, GetValue=4060	PositionSensing_IsValid()=1, PositionSensing_GetPosition()=1, pos=0	PositionSensing_IsValid=1 AND pos=0
+PS_04	SWE-REQ-015	Map ADC to position 1 region	Init done	Poll=HAL_OK, GetValue=3800	pos=1	PositionSensing_GetPosition=1 AND pos=1
+PS_05	SWE-REQ-015	Map ADC to position 2 region	Init done	Poll=HAL_OK, GetValue=3500	pos=2	PositionSensing_GetPosition=1 AND pos=2
+PS_06	SWE-REQ-015	Map ADC to position 3 region	Init done	Poll=HAL_OK, GetValue=3000	pos=3	PositionSensing_GetPosition=1 AND pos=3
+PS_07	SWE-REQ-015	Map ADC to position 4 region	Init done	Poll=HAL_OK, GetValue=1500	pos=4	PositionSensing_GetPosition=1 AND pos=4
+PS_08	SWE-REQ-015	Map ADC to position 5 region (lowest range)	Init done	Poll=HAL_OK, GetValue=500	pos=5	PositionSensing_GetPosition=1 AND pos=5
+PS_09	SWE-REQ-053	Update sets invalid when ADC poll fails	Init done	Poll=HAL_ERROR	PositionSensing_IsValid()=0, PositionSensing_GetPosition()=0	PositionSensing_IsValid=0 AND PositionSensing_GetPosition()=0
+PS_10	SWE-REQ-019	GetPosition returns last stored mapped value after successful update	Init done	Poll=HAL_OK, GetValue=3000 then call GetPosition(&pos)	Return=1, pos=3	Return=1 AND pos=3
+PS_11	SWE-REQ-016	IsAtTarget rejects out-of-range target (>=6)	Init done	IsAtTarget(6)	Return=0	Return=0
+PS_12	SWE-REQ-016	IsAtTarget returns 1 when adc is inside stop range	Init done + Update done	Poll=HAL_OK, GetValue=4060, then IsAtTarget(0)	Return=1	Return=1
+PS_13	SWE-REQ-016	IsAtTarget returns 0 when adc is outside stop range	Init done + Update done	Poll=HAL_OK, GetValue=4040, then IsAtTarget(0)	Return=0	Return=0
+PS_14	SWE-REQ-016	IsAtTarget works for another target stop window	Init done + Update done	Poll=HAL_OK, GetValue=3320, then IsAtTarget(3)	Return=1	Return=1
