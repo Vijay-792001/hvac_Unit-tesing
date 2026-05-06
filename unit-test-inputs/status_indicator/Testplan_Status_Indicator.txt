@@ -1,0 +1,7 @@
+Test Case ID	SW-REQ(s)	Objective	Preconditions	Input / Stimulus	Expected Result	Pass / Fail Criteria
+SI_01	SWE-REQ-025	Power LED turns ON after init	None	StatusIndicator_Init()	Power LED ON, all position LEDs OFF	GPIO_PIN_0 SET once AND GPIO_PIN_1..GPIO_PIN_5 RESET
+SI_02	SWE-REQ-026	Position 0 shows no green LED	Init done	Update(valid=1, pos=0)	All position LEDs OFF	Only RESET calls for GPIO_PIN_1..GPIO_PIN_5, no SET
+SI_03	SWE-REQ-027	Display position 5	Init done	Update(valid=1, pos=5)	Only LED for position 5 ON	RESET all (1..5) then SET GPIO_PIN_5
+SI_04	SWE-REQ-029	Invalid position → all OFF	Init done	Update(valid=0, pos=0xFF)	All position LEDs OFF	Only RESET calls for GPIO_PIN_1..GPIO_PIN_5
+SI_05	SWE-REQ-044	Power LED software control	Init done	SetPowerLED(0) then SetPowerLED(1)	Power LED OFF then ON	GPIO_PIN_0 RESET then GPIO_PIN_0 SET
+SI_06	SWE-REQ-024	Boundary out-of-range (pos=6) → all OFF	Init done	Update(valid=1, pos=6)	All position LEDs OFF	Only RESET calls for GPIO_PIN_1..GPIO_PIN_5 (no SET)
