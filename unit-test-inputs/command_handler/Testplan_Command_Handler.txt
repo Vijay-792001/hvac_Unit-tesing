@@ -1,0 +1,8 @@
+Test Case ID	SW-REQ(s)	Objective	Preconditions	Input (Mocked UART)	Expected Result	Pass / Fail Criteria
+CH_01	SWE-REQ-001,002	Accept valid command '0'	UART mock enabled	rx = '0', HAL_OK	Function returns 1, *cmd_out = 0	Return = 1 AND cmd = 0
+CH_02	SWE-REQ-001,002	Accept valid command '5' (upper bound)	UART mock enabled	rx = '5', HAL_OK	Function returns 1, *cmd_out = 5	Return = 1 AND cmd = 5
+CH_03	SWE-REQ-003	Reject numeric out-of-range command	UART mock enabled	rx = '8', HAL_OK	Function returns 0, *cmd_out unchanged	Return = 0
+CH_04	SWE-REQ-003	Reject non-numeric command	UART mock enabled	rx = 'x', HAL_OK	Function returns 0, *cmd_out unchanged	Return = 0
+CH_05	SWE-REQ-053	Reject UART receive failure	UART mock enabled	HAL_ERROR	Function returns 0, *cmd_out unchanged	Return = 0
+CH-06	SWE-REQ-046	Handle NULL pointer safely	UART mock enabled	cmd_out = NULL	No crash ( No segmentation fault)	Test passes if no crash
+CH_07	SWE-REQ-058	Do not modify output on invalid data	UART mock enabled	rx = '9', HAL_OK	*cmd_out remains unchanged	cmd unchanged
