@@ -6,42 +6,85 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-/* Test Plan ID: TC01 */
-void test_status_indicator_TC01(void)
+void test_status_indicator_SI01(void)
 {
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
-    int result = status_indicator_on();
-    TEST_ASSERT_EQUAL(0, result);
+    GPIO_InitTypeDef gpio_init;
+    gpio_init.Pin = GPIO_PIN_0;
+    gpio_init.Mode = GPIO_MODE_OUTPUT_PP;
+    gpio_init.Pull = GPIO_NOPULL;
+    gpio_init.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init_Expect(GPIOC, &gpio_init);
+    StatusIndicator_Init();
 }
 
-/* Test Plan ID: TC02 */
-void test_status_indicator_TC02(void)
+void test_status_indicator_SI02(void)
 {
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-    int result = status_indicator_off();
-    TEST_ASSERT_EQUAL(0, result);
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_0, GPIO_PIN_SET);
+    StatusIndicator_SetLED(0, 1);
 }
 
-/* Test Plan ID: TC03 */
-void test_status_indicator_TC03(void)
+void test_status_indicator_SI03(void)
 {
-    HAL_GPIO_TogglePin_Expect(GPIOA, GPIO_PIN_5);
-    int result = status_indicator_toggle();
-    TEST_ASSERT_EQUAL(0, result);
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET);
+    StatusIndicator_SetLED(0, 0);
 }
 
-/* Test Plan ID: TC04 */
-void test_status_indicator_TC04(void)
+void test_status_indicator_SI04(void)
 {
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
-    int result = status_indicator_set_state(1);
-    TEST_ASSERT_EQUAL(0, result);
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_SET);
+    StatusIndicator_SetLED(1, 1);
 }
 
-/* Test Plan ID: TC05 */
-void test_status_indicator_TC05(void)
+void test_status_indicator_SI05(void)
 {
-    HAL_GPIO_WritePin_Expect(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-    int result = status_indicator_set_state(0);
-    TEST_ASSERT_EQUAL(0, result);
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
+    StatusIndicator_SetLED(1, 0);
+}
+
+void test_status_indicator_SI06(void)
+{
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_SET);
+    StatusIndicator_SetLED(2, 1);
+}
+
+void test_status_indicator_SI07(void)
+{
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
+    StatusIndicator_SetLED(2, 0);
+}
+
+void test_status_indicator_SI08(void)
+{
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_SET);
+    StatusIndicator_SetLED(3, 1);
+}
+
+void test_status_indicator_SI09(void)
+{
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
+    StatusIndicator_SetLED(3, 0);
+}
+
+void test_status_indicator_SI10(void)
+{
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_4, GPIO_PIN_SET);
+    StatusIndicator_SetLED(4, 1);
+}
+
+void test_status_indicator_SI11(void)
+{
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_4, GPIO_PIN_RESET);
+    StatusIndicator_SetLED(4, 0);
+}
+
+void test_status_indicator_SI12(void)
+{
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_SET);
+    StatusIndicator_SetLED(5, 1);
+}
+
+void test_status_indicator_SI13(void)
+{
+    HAL_GPIO_WritePin_Expect(GPIOC, GPIO_PIN_5, GPIO_PIN_RESET);
+    StatusIndicator_SetLED(5, 0);
 }

@@ -6,47 +6,68 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-/* Test Plan ID: TC01 */
-void test_command_handler_TC01(void)
+void test_command_handler_CH_01(void)
 {
-    uint8_t rx_buffer[10] = {0};
-    HAL_UART_Receive_ExpectAndReturn(&huart1, rx_buffer, sizeof(rx_buffer), HAL_OK);
-    int result = command_handler_receive_command(rx_buffer, sizeof(rx_buffer));
-    TEST_ASSERT_EQUAL(0, result);
+    uint8_t cmd_out = CMD_INVALID;
+    uint8_t rx_data = '0';
+    HAL_UART_Receive_ExpectAndReturn(NULL, &rx_data, CMD_UART_BUF_LEN, 0, HAL_OK);
+    int ret = CommandHandler_PollCommand(&cmd_out);
+    TEST_ASSERT_EQUAL_INT(1, ret);
+    TEST_ASSERT_EQUAL_UINT8(0, cmd_out);
 }
 
-/* Test Plan ID: TC02 */
-void test_command_handler_TC02(void)
+void test_command_handler_CH_02(void)
 {
-    uint8_t rx_buffer[10] = {0};
-    HAL_UART_Receive_ExpectAndReturn(&huart1, rx_buffer, sizeof(rx_buffer), HAL_ERROR);
-    int result = command_handler_receive_command(rx_buffer, sizeof(rx_buffer));
-    TEST_ASSERT_EQUAL(-1, result);
+    uint8_t cmd_out = CMD_INVALID;
+    uint8_t rx_data = '5';
+    HAL_UART_Receive_ExpectAndReturn(NULL, &rx_data, CMD_UART_BUF_LEN, 0, HAL_OK);
+    int ret = CommandHandler_PollCommand(&cmd_out);
+    TEST_ASSERT_EQUAL_INT(1, ret);
+    TEST_ASSERT_EQUAL_UINT8(5, cmd_out);
 }
 
-/* Test Plan ID: TC03 */
-void test_command_handler_TC03(void)
+void test_command_handler_CH_03(void)
 {
-    uint8_t rx_buffer[10] = {0x01, 0x02};
-    HAL_UART_Receive_ExpectAndReturn(&huart1, rx_buffer, sizeof(rx_buffer), HAL_OK);
-    int result = command_handler_process_command(rx_buffer, sizeof(rx_buffer));
-    TEST_ASSERT_EQUAL(1, result);
+    uint8_t cmd_out = CMD_INVALID;
+    uint8_t rx_data = '8';
+    HAL_UART_Receive_ExpectAndReturn(NULL, &rx_data, CMD_UART_BUF_LEN, 0, HAL_OK);
+    int ret = CommandHandler_PollCommand(&cmd_out);
+    TEST_ASSERT_EQUAL_INT(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(CMD_INVALID, cmd_out);
 }
 
-/* Test Plan ID: TC04 */
-void test_command_handler_TC04(void)
+void test_command_handler_CH_04(void)
 {
-    uint8_t rx_buffer[10] = {0xFF};
-    HAL_UART_Receive_ExpectAndReturn(&huart1, rx_buffer, sizeof(rx_buffer), HAL_OK);
-    int result = command_handler_process_command(rx_buffer, sizeof(rx_buffer));
-    TEST_ASSERT_EQUAL(-1, result);
+    uint8_t cmd_out = CMD_INVALID;
+    uint8_t rx_data = 'x';
+    HAL_UART_Receive_ExpectAndReturn(NULL, &rx_data, CMD_UART_BUF_LEN, 0, HAL_OK);
+    int ret = CommandHandler_PollCommand(&cmd_out);
+    TEST_ASSERT_EQUAL_INT(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(CMD_INVALID, cmd_out);
 }
 
-/* Test Plan ID: TC05 */
-void test_command_handler_TC05(void)
+void test_command_handler_CH_05(void)
 {
-    uint8_t rx_buffer[10] = {0};
-    HAL_UART_Receive_ExpectAndReturn(&huart1, rx_buffer, sizeof(rx_buffer), HAL_OK);
-    int result = command_handler_execute(rx_buffer, sizeof(rx_buffer));
-    TEST_ASSERT_EQUAL(0, result);
+    uint8_t cmd_out = CMD_INVALID;
+    HAL_UART_Receive_ExpectAndReturn(NULL, NULL, CMD_UART_BUF_LEN, 0, HAL_ERROR);
+    int ret = CommandHandler_PollCommand(&cmd_out);
+    TEST_ASSERT_EQUAL_INT(0, ret);
+    TEST_ASSERT_EQUAL_UINT8(CMD_INVALID, cmd_out);
+}
+
+void test_command_handler_CH_06(void)
+{
+    HAL_UART_Receive_ExpectAndReturn(NULL, NULL, CMD_UART_BUF_LEN, 0, HAL_OK);
+    int ret = CommandHandler_PollCommand(NULL);
+    TEST_ASSERT_EQUAL_INT(0, ret);
+}
+
+void test_command_handler_CH_07(void)
+{
+    uint8_t cmd_out = CMD_INVALID;
+    uint8_t rx_data = '9';
+    HAL_UART_Receive_ExpectAndReturn(NULL, &rx_data, CMD_UART_BUF_LEN, 0, HAL_OK);
+    int ret = CommandHandler_PollCommand(&cmd_out);
+    TEST_ASSERT_EQUAL_UINT8(CMD_INVALID, cmd_out);
+    TEST_ASSERT_EQUAL_INT(0, ret);
 }

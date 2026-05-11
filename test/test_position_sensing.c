@@ -6,49 +6,49 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-/* Test Plan ID: TC01 */
-void test_position_sensing_TC01(void)
+void test_position_sensing_PS01(void)
 {
-    HAL_ADC_Start_ExpectAndReturn(&hadc1, HAL_OK);
-    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_OK);
-    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 1234);
-    int result = position_sensing_read();
-    TEST_ASSERT_EQUAL(1234, result);
+    ADC_HandleTypeDef hadc;
+    HAL_ADC_Start_ExpectAndReturn(&hadc, HAL_OK);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc, 10, HAL_OK);
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc, 1234U);
+    uint32_t value = PositionSensing_ReadADC(&hadc);
+    TEST_ASSERT_EQUAL_UINT32(1234U, value);
 }
 
-/* Test Plan ID: TC02 */
-void test_position_sensing_TC02(void)
+void test_position_sensing_PS02(void)
 {
-    HAL_ADC_Start_ExpectAndReturn(&hadc1, HAL_ERROR);
-    int result = position_sensing_read();
-    TEST_ASSERT_EQUAL(-1, result);
+    ADC_HandleTypeDef hadc;
+    HAL_ADC_Start_ExpectAndReturn(&hadc, HAL_ERROR);
+    uint32_t value = PositionSensing_ReadADC(&hadc);
+    TEST_ASSERT_EQUAL_UINT32(0U, value);
 }
 
-/* Test Plan ID: TC03 */
-void test_position_sensing_TC03(void)
+void test_position_sensing_PS03(void)
 {
-    HAL_ADC_Start_ExpectAndReturn(&hadc1, HAL_OK);
-    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_ERROR);
-    int result = position_sensing_read();
-    TEST_ASSERT_EQUAL(-2, result);
+    ADC_HandleTypeDef hadc;
+    HAL_ADC_Start_ExpectAndReturn(&hadc, HAL_OK);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc, 10, HAL_ERROR);
+    uint32_t value = PositionSensing_ReadADC(&hadc);
+    TEST_ASSERT_EQUAL_UINT32(0U, value);
 }
 
-/* Test Plan ID: TC04 */
-void test_position_sensing_TC04(void)
+void test_position_sensing_PS04(void)
 {
-    HAL_ADC_Start_ExpectAndReturn(&hadc1, HAL_OK);
-    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_OK);
-    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 0);
-    int result = position_sensing_read();
-    TEST_ASSERT_EQUAL(0, result);
+    ADC_HandleTypeDef hadc;
+    HAL_ADC_Start_ExpectAndReturn(&hadc, HAL_OK);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc, 10, HAL_OK);
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc, 4095U);
+    uint32_t value = PositionSensing_ReadADC(&hadc);
+    TEST_ASSERT_EQUAL_UINT32(4095U, value);
 }
 
-/* Test Plan ID: TC05 */
-void test_position_sensing_TC05(void)
+void test_position_sensing_PS05(void)
 {
-    HAL_ADC_Start_ExpectAndReturn(&hadc1, HAL_OK);
-    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc1, 10, HAL_OK);
-    HAL_ADC_GetValue_ExpectAndReturn(&hadc1, 4095);
-    int result = position_sensing_read();
-    TEST_ASSERT_EQUAL(4095, result);
+    ADC_HandleTypeDef hadc;
+    HAL_ADC_Start_ExpectAndReturn(&hadc, HAL_OK);
+    HAL_ADC_PollForConversion_ExpectAndReturn(&hadc, 10, HAL_OK);
+    HAL_ADC_GetValue_ExpectAndReturn(&hadc, 0U);
+    uint32_t value = PositionSensing_ReadADC(&hadc);
+    TEST_ASSERT_EQUAL_UINT32(0U, value);
 }

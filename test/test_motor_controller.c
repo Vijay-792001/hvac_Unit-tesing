@@ -6,43 +6,45 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-/* Test Plan ID: TC01 */
-void test_motor_controller_TC01(void)
+void test_motor_controller_MC01(void)
 {
-    HAL_TIM_PWM_Start_ExpectAndReturn(&htim1, TIM_CHANNEL_1, HAL_OK);
-    int result = motor_controller_start();
-    TEST_ASSERT_EQUAL(0, result);
+    TIM_HandleTypeDef htim;
+    HAL_TIM_PWM_Start_ExpectAndReturn(&htim, TIM_CHANNEL_1, HAL_OK);
+    int ret = MotorController_StartPWM(&htim);
+    TEST_ASSERT_EQUAL_INT(0, ret);
 }
 
-/* Test Plan ID: TC02 */
-void test_motor_controller_TC02(void)
+void test_motor_controller_MC02(void)
 {
-    HAL_TIM_PWM_Start_ExpectAndReturn(&htim1, TIM_CHANNEL_1, HAL_ERROR);
-    int result = motor_controller_start();
-    TEST_ASSERT_EQUAL(-1, result);
+    TIM_HandleTypeDef htim;
+    HAL_TIM_PWM_Start_ExpectAndReturn(&htim, TIM_CHANNEL_1, HAL_ERROR);
+    int ret = MotorController_StartPWM(&htim);
+    TEST_ASSERT_EQUAL_INT(-1, ret);
 }
 
-/* Test Plan ID: TC03 */
-void test_motor_controller_TC03(void)
+void test_motor_controller_MC03(void)
 {
-    HAL_TIM_PWM_Stop_ExpectAndReturn(&htim1, TIM_CHANNEL_1, HAL_OK);
-    int result = motor_controller_stop();
-    TEST_ASSERT_EQUAL(0, result);
+    TIM_HandleTypeDef htim;
+    HAL_TIM_PWM_Stop_ExpectAndReturn(&htim, TIM_CHANNEL_1, HAL_OK);
+    int ret = MotorController_StopPWM(&htim);
+    TEST_ASSERT_EQUAL_INT(0, ret);
 }
 
-/* Test Plan ID: TC04 */
-void test_motor_controller_TC04(void)
+void test_motor_controller_MC04(void)
 {
-    HAL_TIM_PWM_Stop_ExpectAndReturn(&htim1, TIM_CHANNEL_1, HAL_ERROR);
-    int result = motor_controller_stop();
-    TEST_ASSERT_EQUAL(-1, result);
+    TIM_HandleTypeDef htim;
+    HAL_TIM_PWM_Stop_ExpectAndReturn(&htim, TIM_CHANNEL_1, HAL_ERROR);
+    int ret = MotorController_StopPWM(&htim);
+    TEST_ASSERT_EQUAL_INT(-1, ret);
 }
 
-/* Test Plan ID: TC05 */
-void test_motor_controller_TC05(void)
+void test_motor_controller_MC05(void)
 {
-    HAL_TIM_PWM_Start_ExpectAndReturn(&htim1, TIM_CHANNEL_1, HAL_OK);
-    HAL_TIM_PWM_Stop_ExpectAndReturn(&htim1, TIM_CHANNEL_1, HAL_OK);
-    int result = motor_controller_restart();
-    TEST_ASSERT_EQUAL(0, result);
+    TIM_HandleTypeDef htim;
+    HAL_TIM_PWM_Start_ExpectAndReturn(&htim, TIM_CHANNEL_1, HAL_OK);
+    HAL_TIM_PWM_Stop_ExpectAndReturn(&htim, TIM_CHANNEL_1, HAL_OK);
+    int ret_start = MotorController_StartPWM(&htim);
+    int ret_stop = MotorController_StopPWM(&htim);
+    TEST_ASSERT_EQUAL_INT(0, ret_start);
+    TEST_ASSERT_EQUAL_INT(0, ret_stop);
 }
