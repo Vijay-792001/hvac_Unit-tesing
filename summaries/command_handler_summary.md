@@ -1,0 +1,26 @@
+- Purpose: Implements a simple polled UART command handler that reads a single byte from UART2 and, if it’s a valid command, converts it to a numeric code (0–5).
+- Key function: uint8_t CommandHandler_PollCommand(uint8_t *cmd_out) — attempts to read one byte and, on success with a valid digit, writes the parsed command to cmd_out and returns 1; otherwise returns 0.
+- Main logic flow: 
+  - Guard against NULL output pointer (“CH-06: NULL pointer protection”).
+  - Call HAL_UART_Receive(&huart2, &rx, 1, 10) to read 1 byte with a 10 ms timeout.
+  - Validate the received byte is ASCII '0'..'5'; if valid, convert to 0..5 via rx - '0', store to cmd_out, return 1; else return 0.
+- Dependencies:
+  - Includes command_handler.h (interface, not shown) and stm32f4xx_hal.h (STM32 HAL).
+  - Uses extern UART_HandleTypeDef huart2; assumes it’s initialized elsewhere.
+  - Relies on HAL status codes (HAL_OK) and blocking HAL UART API.
+- Behavior/assumptions:
+  - Single-character command protocol limited to digits '0'–'5' (six commands).
+  - Returns 0 for three cases indistinguishably: no data/timeout, HAL receive error, or invalid character.
+  - Only updates cmd_out on valid command; otherwise leaves it unchanged.
+- Error handling:
+  - Immediate return if cmd_out is NULL.
+  - Checks HAL_UART_Receive result; any non-OK leads to a 0 return (no logging/diagnostics).
+  - Invalid bytes outside '0'–'5' are ignored (function returns 0).
+- Edge cases and risks:
+  - Blocking call may delay the caller by up to 10 ms per poll; unsuitable for time-critical loops or ISRs.
+  - No buffering or multi-byte parsing; additional incoming bytes beyond the first are handled on subsequent calls.
+  - Not thread-safe/reentrant; assumes single-context use around huart2.
+  - Limited command range; non-digit inputs (including CR/LF) are treated as invalid.
+- Integration notes:
+  - Must be called repeatedly in a polling loop to catch incoming commands.
+  - Requires proper UART2 initialization and configuration outside this module.
