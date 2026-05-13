@@ -1,1 +1,24 @@
-summary_text
+- Purpose: Implements a simple UART command handler that polls UART2 for a single-byte ASCII digit and, if valid, converts it to a numeric command (0–5).
+- File/Module: command_handler.c (module: item). Public API provided via command_handler.h.
+- Main function: uint8_t CommandHandler_PollCommand(uint8_t* cmd_out)
+  - Inputs: cmd_out pointer to store parsed command (0–5).
+  - Returns: 1 on success (valid command stored), 0 on failure (no/invalid data or error).
+- Key flow:
+  - Guard: If cmd_out is NULL, immediately return 0 (NULL pointer protection).
+  - UART read: Attempt to receive 1 byte from huart2 with a 10 ms timeout using HAL_UART_Receive.
+  - Validation: If received byte is between '0' and '5', convert to numeric by subtracting '0', write to *cmd_out, return 1; otherwise return 0.
+- Dependencies:
+  - STM32 HAL: stm32f4xx_hal.h for HAL_UART_Receive and types.
+  - External UART handle: extern UART_HandleTypeDef huart2 must be initialized elsewhere.
+  - Local header: command_handler.h for the function declaration.
+- Behavior/usage notes:
+  - Polling-style, but uses a blocking HAL receive with a short (10 ms) timeout per call.
+  - Consumes exactly one received byte per call; invalid bytes are discarded (no output written).
+  - Only accepts ASCII digits '0'..'5'; outputs numeric 0..5.
+- Error handling:
+  - Returns 0 on NULL output pointer, HAL receive failure/timeout, or invalid character.
+  - No errno or detailed error codes; boolean-style success/fail via uint8_t.
+- Assumptions/risks:
+  - Not thread-safe; relies on global huart2 and assumes no concurrent UART use (e.g., IRQ/DMA) on the same handle.
+  - Potential to miss queued bytes if producer is faster than the polling cadence (reads only one byte per call).
+  - Blocking wait (up to 10 ms) may impact real-time responsiveness if called in time-critical paths.
