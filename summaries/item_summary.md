@@ -1,37 +1,25 @@
-ag-code-summarizer Agent
-
-- Context: Module=item, File=c_file_path. Purpose: read raw ADC via STM32 HAL, map to a discrete “flap” position index (0–5), expose validity and target-hit checks. Traceability to multiple SWE-REQs, notably init (SWE-REQ-040), provide position (SWE-REQ-019), and validity flag (SWE-REQ-017).
-- Key data/structures:
-  - PositionStopRange_t {min,max}; s_stop_ranges[6] define tight ADC windows for each physical stop (0..5): e.g., [4055–4065], [3837–3857], ..., [315–335].
-  - Internal state: s_adc_value (last raw), s_logical_position (mapped 0–5 or FLAP_POSITION_INVALID), s_position_valid (0/1).
-  - Static mapper Position_GetFromADC(adc): thresholds >4000→0, >3750→1, >3480→2, >2500→3, >1000→4, else 5.
+- Purpose (Module: item, File: c_file_path): Implements control of a power LED and up to five position-indication LEDs on an STM32F4 device, mapping a validated logical position to a single lit LED and maintaining power LED state.
 - Public API:
-  - PositionSensing_Init(): clears state (raw=0, logical=FLAP_POSITION_INVALID, valid=0).
-  - PositionSensing_Update(): HAL_ADC_Start, HAL_ADC_PollForConversion(timeout=2); on OK, captures ADC, maps to logical position, sets valid=1; on failure, sets logical=FLAP_POSITION_INVALID and valid=0 (raw remains unchanged).
-  - PositionSensing_GetPosition(uint8_t* pos_out): if valid and pointer non-NULL, writes current logical position and returns 1; else returns 0.
-  - PositionSensing_IsValid(): returns validity flag (1 if last update succeeded).
-  - PositionSensing_IsAtTarget(uint8_t target): returns 1 if 0<=target<6 and s_adc_value within target’s stop range; else 0.
-- Control/usage flow:
-  - Call Init once.
-  - Periodically call Update to sample ADC and refresh state.
-  - Consumers read IsValid/GetPosition for logical position; optionally call IsAtTarget to confirm precise stop using tight ADC windows.
+  - StatusIndicator_Init(): Configures GPIOs and sets initial LED states (power ON, all position LEDs OFF).
+  - StatusIndicator_Update(uint8_t position_valid, uint8_t logical_position): Turns OFF all position LEDs, then lights exactly one LED if position is valid and within range.
+  - StatusIndicator_SetPowerLED(uint8_t onoff): Sets the power LED ON (nonzero) or OFF (zero).
+- Key flows/logic:
+  - Initialization sets GPIOC pins (PC0–PC5) to output push-pull, no pull, low speed; then sets power LED high and clears all position LEDs.
+  - Update sequence always clears all position LEDs first to ensure exclusivity, then lights s_led_pos_pins[logical_position-1] when position_valid != 0 and logical_position ∈ [1, STATUS_INDICATOR_NUM]; logical_position 0 results in no green LED.
+- LED mapping: s_led_pos_pins is a 5-element array {PC1..PC5}; STATUS_INDICATOR_NUM (presumably 5) must match this array length. Mapping is 1-based input to 0-based array (1→index 0, …, 5→index 4).
 - Dependencies:
-  - STM32F4 HAL ADC: stm32f4xx_hal.h, extern ADC handle hadc1; uses HAL_ADC_Start, HAL_ADC_PollForConversion, HAL_ADC_GetValue.
-  - position_sensing.h for declarations and FLAP_POSITION_INVALID definition.
-- Validation/error handling:
-  - Guards: target index range in IsAtTarget; NULL pointer check in GetPosition.
-  - Validity flag communicates success/failure of latest ADC poll; mapping only occurs on successful conversion.
-  - No retry/backoff; Update uses a blocking poll with very short timeout (2).
-- Notable assumptions:
-  - Exactly six discrete positions with relatively narrow, stable ADC ranges (s_stop_ranges).
-  - Coarse logical mapping thresholds need not exactly match tight stop windows; logical position is an approximate categorization, while IsAtTarget provides precise confirmation.
-  - HAL is correctly initialized elsewhere; hadc1 configured for the channel/sequence used.
-- Risks/edge cases:
-  - Stale s_adc_value: on ADC failure, valid=0 but s_adc_value is not updated; IsAtTarget does not consult validity and may report “at target” based on old data.
-  - No filtering/debouncing or averaging; susceptible to noise and ADC drift—especially since mapping thresholds and stop ranges are hard-coded “magic numbers.”
-  - No handling of HAL_ADC_Start return or stopping the ADC; repeated starts may rely on HAL internals.
-  - Tight stop windows may fail if ADC reference, temperature, or sensor tolerance shifts; thresholds/ranges likely require calibration.
-
----
-
-Task is completed
+  - Headers: status_indicator.h (decls, STATUS_INDICATOR_NUM), stm32f4xx_hal.h (HAL GPIO).
+  - HAL APIs/types/macros: HAL_GPIO_Init, HAL_GPIO_WritePin, GPIO_InitTypeDef, GPIO_MODE_OUTPUT_PP, GPIO_NOPULL, GPIO_SPEED_FREQ_LOW, GPIOC, GPIO_PIN_x.
+  - Assumes RCC clock enable for GPIOC occurs elsewhere.
+- Configuration details:
+  - Power LED: LED_POWER_PORT=GPIOC, LED_POWER_PIN=GPIO_PIN_0.
+  - Position LEDs share port GPIOC with pins PC1–PC5.
+- Error handling/safeguards:
+  - Bounds check on logical_position and validity flag prevents out-of-range access; out-of-range or invalid leaves all position LEDs OFF.
+  - No return codes or HAL error checks; assumes HAL calls succeed.
+- Notable assumptions/risks:
+  - STATUS_INDICATOR_NUM must equal the s_led_pos_pins array size; mismatch would risk out-of-bounds.
+  - Clearing all LEDs before setting one may cause visible flicker if Update is called at high rates.
+  - onoff treats any nonzero as ON; no strict boolean enforcement.
+  - Uses a shared static GPIO_InitTypeDef; functions are not re-entrant and make no concurrency/thread-safety guarantees.
+- Traceability: File header cites requirement IDs SWE-REQ-021/022/023/024/025/026/027/029/044, implying coverage of power and position LED behaviors.
