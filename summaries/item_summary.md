@@ -1,28 +1,15 @@
-- Module: item; File: c_file_path — Purpose: Read flap position via ADC, map raw value to a logical index [0..5], track validity, and report if current reading is within defined stop ranges. Traced to SWE-REQ-013/014/015/016/017/018/019/020/040/041.
-- Key data/state: 
-  - s_stop_ranges[6]: per-position inclusive ADC windows for “at target” checks.
-  - Internal state: s_adc_value (last raw ADC), s_logical_position (mapped 0–5 or FLAP_POSITION_INVALID), s_position_valid (0/1).
-- Dependencies:
-  - position_sensing.h (decls, FLAP_POSITION_INVALID).
-  - STM32 HAL ADC (stm32f4xx_hal.h): HAL_ADC_Start, HAL_ADC_PollForConversion, HAL_ADC_GetValue.
-  - Extern ADC_HandleTypeDef hadc1 provided elsewhere.
-- Main functions:
-  - PositionSensing_Init(): clears state; logical position set to FLAP_POSITION_INVALID; validity cleared.
-  - PositionSensing_Update(): starts ADC, polls with timeout=2; on success reads ADC, maps via Position_GetFromADC(), sets validity=1; on failure sets logical to FLAP_POSITION_INVALID and validity=0.
-  - PositionSensing_GetPosition(uint8_t*): if validity=1 and pointer non-NULL, writes logical position and returns 1; else returns 0.
-  - PositionSensing_IsAtTarget(uint8_t target): returns 1 if 0<=target<6 and s_adc_value is within s_stop_ranges[target]; else 0.
-  - PositionSensing_IsValid(): returns s_position_valid (0/1).
-  - Static helper Position_GetFromADC(uint16_t): threshold-based mapping (>4000→0, >3750→1, >3480→2, >2500→3, >1000→4, else 5).
-- Operational flow: Client calls Init once; periodically calls Update to refresh s_adc_value and s_logical_position; queries IsValid/GetPosition for current logical index and IsAtTarget to see if raw ADC lies in a narrow per-position window.
-- Error handling/guards:
-  - ADC poll failure path marks reading invalid and resets logical position.
-  - Bounds check on target index in IsAtTarget.
-  - NULL pointer and validity checks in GetPosition.
-  - Uses 1U/0U as boolean return values.
-- Notable assumptions/risks:
-  - Hardcoded thresholds for mapping and separate narrow “at target” ranges; potential mismatch between coarse mapping bands and precise stop windows.
-  - Single-sample, no filtering/averaging/debouncing; may be noisy or jittery near thresholds.
-  - Poll timeout of 2 (likely ms) may be too short; failures clear validity.
-  - Requires Update to be called before queries; otherwise s_adc_value/logical may be stale.
-  - No concurrency/thread-safety; shared static state could be raced in ISR/RTOS contexts.
-  - Assumes ADC range consistent with thresholds (e.g., 12-bit ~0–4095); calibration not shown.
+ag-code-summarizer Agent summary
+
+- Module and file: Module=item, File=c_file_path. Purpose: implement simple control of a power LED and up to STATUS_INDICATOR_NUM position LEDs on an STM32F4, per traced requirements SWE-REQ-021/022/023/024/025/026/027/029/044.
+- Dependencies/environment: uses STM32 HAL (stm32f4xx_hal.h) GPIO API; requires status_indicator.h (defines STATUS_INDICATOR_NUM and function prototypes). All LEDs are on GPIOC: power LED on PC0; position LEDs on PC1–PC5. Assumes HAL is initialized and the GPIOC peripheral clock is enabled elsewhere.
+- Static data/config: GPIO_InitTypeDef GPIO_InitStruct used for pin configuration. s_led_pos_pins maps logical position indices to GPIOC pins {PC1..PC5}. Critical assumption: STATUS_INDICATOR_NUM matches the length of s_led_pos_pins (5).
+- StatusIndicator_Init(): configures PC0–PC5 as push-pull outputs, no pull, low speed; turns the power LED ON and explicitly turns all position LEDs OFF to a known default state.
+- StatusIndicator_Update(position_valid, logical_position): first turns OFF all position LEDs, then, if position_valid is nonzero and logical_position is in [1, STATUS_INDICATOR_NUM], turns ON exactly one LED corresponding to logical_position - 1 (i.e., pos 1→LED at PC1, …, pos 5→PC5). Position 0 or out-of-range yields no position LED lit.
+- StatusIndicator_SetPowerLED(onoff): directly sets or clears the power LED (1=ON, 0=OFF) via HAL_GPIO_WritePin.
+- Typical flow/usage: call StatusIndicator_Init once during system init; periodically invoke StatusIndicator_Update with current validity and position to reflect state; use StatusIndicator_SetPowerLED to override/reflect power status as needed. Design enforces at most one position LED lit at a time.
+- Error handling and checks: no return values, no error reporting; relies on simple input guards in Update; invalid positions are ignored without indication. No protection against concurrent access (ISR/task), no debounce/timing, and no verification that GPIO clocks/pins are correctly configured by the broader system.
+- Notable risks/assumptions: hard-coded GPIOC pins must match hardware; mismatch between STATUS_INDICATOR_NUM and s_led_pos_pins length risks out-of-bounds access if NUM > 5 or unused pins if NUM < 5; repeated clear-then-set each update may cause visible flicker if driven at low rates; assumes HAL calls are safe and non-failing in the runtime context.
+
+---
+
+Task is completed
