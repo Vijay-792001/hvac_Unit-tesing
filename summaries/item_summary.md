@@ -1,25 +1,30 @@
-- Module and file: item / c_file_path (command_handler.c) — UART command handler implementing simple parsing/validation for commands over USART2.
-- Main function: uint8_t CommandHandler_PollCommand(uint8_t *cmd_out) — polls UART2 for a single byte; on valid input writes a parsed command (0–5) to cmd_out and returns 1; otherwise returns 0.
+- Context: Module item, file c_file_path (motor_controller.c). Purpose is to drive a DC motor for HVAC flap positioning using PWM and H-bridge GPIOs; implements safety and movement per traces SWE-REQ-003/004/008/009/010/013/014/015/035/047/054.
+- Public API:
+  - MotorController_Init: Configures GPIOB pins (PB0 forward, PB1 reverse) as push-pull outputs, sets safe state, and starts PWM on TIM3 CH1.
+  - MotorController_MoveTo(uint8_t target): Sets target, reads current position; if equal, aborts; else sets direction pins and state, starts PWM; aborts if position read fails.
+  - MotorController_Update: If movement active, updates sensing, checks current position; aborts when at target or if position becomes invalid.
+  - MotorController_Abort: Stops PWM, resets direction pins low, clears movement flag, sets state STOPPED.
+  - Accessors: MotorController_GetState, MotorController_IsMoving, MotorController_GetTarget (returns target only when idle, target < 6, and non-null pointer).
 - Control flow:
-  - Guard: if cmd_out is NULL, return 0.
-  - Attempt to receive 1 byte from huart2 via HAL_UART_Receive with a timeout of 10 (HAL units, typically milliseconds).
-  - If receive succeeds and byte is in ASCII range '0'–'5', convert to numeric (rx - '0'), store in *cmd_out, and return 1.
-  - For any failure, invalid byte, or timeout, return 0 without modifying output.
-- Dependencies:
-  - Headers: command_handler.h (local API), stm32f4xx_hal.h (STM32F4 HAL).
-  - External/global: extern UART_HandleTypeDef huart2; uses HAL_UART_Receive from STM32 HAL.
-- Behavior/semantics:
-  - Non-blocking-ish polling with short blocking window (up to ~10 ms per call).
-  - Accepts only ASCII digits 0–5 as valid commands; maps to numeric 0–5.
-- Error handling and validation:
-  - NULL pointer protection for cmd_out.
-  - Range check on received byte to ensure valid command.
-  - Binary return status: 1 = command parsed; 0 = no data/timeout/invalid input/error.
-- Assumptions:
-  - UART2 is initialized and accessible via huart2.
-  - ASCII encoding for incoming data.
-  - Caller repeatedly polls and provides a valid buffer to receive parsed command.
-- Notable risks/limitations:
-  - Polling can miss bytes if not called frequently; processes at most one byte per call, no buffering.
-  - Short blocking period may affect time-critical loops; not suitable for high-throughput streams.
-  - Not thread/ISR-safe if huart2 is accessed concurrently elsewhere without synchronization.
+  - Init establishes a safe baseline (outputs low, STOPPED, inactive) and enables the PWM channel.
+  - MoveTo decides direction based on current vs target, drives exactly one H-bridge input high (other low), marks moving, and ensures PWM is running.
+  - Update is expected to run periodically; it refreshes sensing, then either aborts at target or on invalid sensing.
+  - Abort is the unified safety stop path used by MoveTo (no-op case), Update (target/invalid), and any external stop.
+- Dependencies and hardware:
+  - STM32F4 HAL: GPIO and TIM PWM (extern TIM_HandleTypeDef htim3; uses TIM_CHANNEL_1).
+  - GPIOB: PB0 (MOTOR_PIN_DIR_FWD), PB1 (MOTOR_PIN_DIR_REV) control direction.
+  - position_sensing module: PositionSensing_Update, PositionSensing_GetPosition, PositionSensing_IsAtTarget provide feedback and target detection.
+- Internal state: s_motor_state (STOPPED/MOVING_FWD/MOVING_REV), s_target_position (uint8_t), s_movement_active (flag).
+- Safety/error handling:
+  - Always drives both direction pins low and stops PWM on Abort.
+  - MoveTo aborts immediately if the current position cannot be read or equals the target.
+  - Update aborts if position sensing becomes invalid or when target is reached.
+- Assumptions/constraints:
+  - Update must be called periodically for closed-loop stopping at the target.
+  - PWM duty configuration is assumed to be done elsewhere (not set in this file).
+  - Valid target range appears to be 0–5 (GetTarget enforces < 6), but MoveTo does not validate the input range.
+- Notable risks:
+  - Lack of explicit target range validation in MoveTo could cause indefinite drive if IsAtTarget never returns true for an out-of-range target.
+  - No timeout, stall detection, or end-stop handling; relies solely on position sensing validity/target check to stop.
+  - PWM is started in Init and again in MoveTo (likely benign but redundant); behavior depends on HAL idempotency.
+  - Direction naming vs pin levels may be hardware-specific; correctness assumes H-bridge wiring matches the logic used.
