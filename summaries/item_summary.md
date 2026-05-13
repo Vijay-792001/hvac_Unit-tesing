@@ -1,12 +1,19 @@
-- Module/File: item / c_file_path — position_sensing.c implements flap position sensing via ADC, mapping raw readings to 6 discrete logical positions; references SWE-REQ-013..020, 040, 041.
-- Dependencies: position_sensing.h (APIs, FLAP_POSITION_INVALID), stm32f4xx_hal.h (HAL_ADC_Start, HAL_ADC_PollForConversion, HAL_ADC_GetValue), extern ADC_HandleTypeDef hadc1.
-- Calibration/data: static const PositionStopRange_t s_stop_ranges[6] define tight ADC min/max windows for each target index 0..5; used for exact “at target” detection with tolerance.
-- Internal state: s_adc_value (last raw ADC), s_logical_position (0..5 or FLAP_POSITION_INVALID), s_position_valid (boolean indicating last update success).
-- Core flow: PositionSensing_Init resets state; application periodically calls PositionSensing_Update to sample ADC and refresh state; clients then use PositionSensing_GetPosition/IsValid to read the logical position or PositionSensing_IsAtTarget to check proximity to a target stop.
-- Mapping logic: static Position_GetFromADC(uint16_t) thresholds map ADC to indices: >4000→0, >3750→1, >3480→2, >2500→3, >1000→4, else 5. Thresholds are coarse versus s_stop_ranges (fine windows) and assume a 12-bit-like ADC scale.
-- Update behavior: PositionSensing_Update starts and polls ADC (timeout 2), on success stores s_adc_value, computes s_logical_position, sets s_position_valid=1; on failure sets s_logical_position=FLAP_POSITION_INVALID and s_position_valid=0 (note: s_adc_value remains last good).
-- Accessors:
-  - PositionSensing_GetPosition(uint8_t*): if s_position_valid and pos_out non-NULL, writes logical position and returns 1; else returns 0.
-  - PositionSensing_IsValid(): returns s_position_valid.
-  - PositionSensing_IsAtTarget(uint8_t target): returns 1 if 0<=target<6 and s_adc_value within s_stop_ranges[target]; else 0. Uses raw ADC windowing, not s_logical_position, and does not check s_position_valid.
-- Notable risks/assumptions: single-sample, no filtering/averaging or hysteresis; hard-coded thresholds and ranges require calibration; stale s_adc_value may drive IsAtTarget true/false even when validity is 0 (on ADC failure); minimal input validation (invalid target, NULL pointer handled); concurrency not addressed (module uses static state).
+- Module/file: item / c_file_path. Purpose: drive power and position indicator LEDs on an STM32F4 board; maps logical positions (1..N) to discrete LEDs; traces to SWE-REQ-021/022/023/024/025/026/027/029/044.
+- Hardware/config: Uses stm32 HAL GPIO on port GPIOC. Power LED on PC0; position LEDs on PC1–PC5. GPIO configured as push-pull outputs, no pull, low speed.
+- Public API:
+  - StatusIndicator_Init(void): Configures GPIOC pins for power and position LEDs; turns power LED ON and all position LEDs OFF.
+  - StatusIndicator_Update(uint8_t position_valid, uint8_t logical_position): Clears all position LEDs; if valid and in range 1..STATUS_INDICATOR_NUM, lights exactly one LED corresponding to logical_position - 1.
+  - StatusIndicator_SetPowerLED(uint8_t onoff): Sets or clears the power LED based on nonzero/zero.
+- Key flows:
+  - Initialization sets up all relevant pins in one HAL_GPIO_Init call; then sets initial LED states (power ON, positions OFF).
+  - Update cycle is idempotent: always turns all position LEDs OFF first, then optionally turns one ON based on inputs; position 0 yields no LED.
+  - Power LED control is independent of position indicators.
+- Data/config structures: static GPIO_InitTypeDef GPIO_InitStruct reused for init; static const uint16_t s_led_pos_pins[STATUS_INDICATOR_NUM] maps logical positions to GPIO pin masks {PC1..PC5}.
+- Dependencies: status_indicator.h (API, STATUS_INDICATOR_NUM), stm32f4xx_hal.h (HAL types/APIs), HAL GPIO functions HAL_GPIO_Init and HAL_GPIO_WritePin; assumes RCC clock to GPIOC enabled elsewhere.
+- Boundary handling:
+  - Guards ensure only 1..STATUS_INDICATOR_NUM positions illuminate; invalid or position_valid == 0 leaves all position LEDs OFF.
+  - STATUS_INDICATOR_NUM must match the s_led_pos_pins initializer length (5); mismatch could cause compile-time issues or unintended no-op for positions > configured pins.
+- Notable assumptions/risks:
+  - No runtime error handling (HAL calls are void); no concurrency protection; repeated OFF→ON writes each update (inefficient but simple).
+  - GPIO_InitStruct fields beyond Pin/Mode/Pull/Speed aren’t explicitly zeroed; acceptable for push-pull but relies on HAL defaults.
+  - Hardware mapping is fixed to GPIOC; any board change requires code/constants update.
