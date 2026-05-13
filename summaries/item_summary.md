@@ -1,19 +1,25 @@
-- Module/file: item / c_file_path. Purpose: drive power and position indicator LEDs on an STM32F4 board; maps logical positions (1..N) to discrete LEDs; traces to SWE-REQ-021/022/023/024/025/026/027/029/044.
-- Hardware/config: Uses stm32 HAL GPIO on port GPIOC. Power LED on PC0; position LEDs on PC1–PC5. GPIO configured as push-pull outputs, no pull, low speed.
-- Public API:
-  - StatusIndicator_Init(void): Configures GPIOC pins for power and position LEDs; turns power LED ON and all position LEDs OFF.
-  - StatusIndicator_Update(uint8_t position_valid, uint8_t logical_position): Clears all position LEDs; if valid and in range 1..STATUS_INDICATOR_NUM, lights exactly one LED corresponding to logical_position - 1.
-  - StatusIndicator_SetPowerLED(uint8_t onoff): Sets or clears the power LED based on nonzero/zero.
-- Key flows:
-  - Initialization sets up all relevant pins in one HAL_GPIO_Init call; then sets initial LED states (power ON, positions OFF).
-  - Update cycle is idempotent: always turns all position LEDs OFF first, then optionally turns one ON based on inputs; position 0 yields no LED.
-  - Power LED control is independent of position indicators.
-- Data/config structures: static GPIO_InitTypeDef GPIO_InitStruct reused for init; static const uint16_t s_led_pos_pins[STATUS_INDICATOR_NUM] maps logical positions to GPIO pin masks {PC1..PC5}.
-- Dependencies: status_indicator.h (API, STATUS_INDICATOR_NUM), stm32f4xx_hal.h (HAL types/APIs), HAL GPIO functions HAL_GPIO_Init and HAL_GPIO_WritePin; assumes RCC clock to GPIOC enabled elsewhere.
-- Boundary handling:
-  - Guards ensure only 1..STATUS_INDICATOR_NUM positions illuminate; invalid or position_valid == 0 leaves all position LEDs OFF.
-  - STATUS_INDICATOR_NUM must match the s_led_pos_pins initializer length (5); mismatch could cause compile-time issues or unintended no-op for positions > configured pins.
-- Notable assumptions/risks:
-  - No runtime error handling (HAL calls are void); no concurrency protection; repeated OFF→ON writes each update (inefficient but simple).
-  - GPIO_InitStruct fields beyond Pin/Mode/Pull/Speed aren’t explicitly zeroed; acceptable for push-pull but relies on HAL defaults.
-  - Hardware mapping is fixed to GPIOC; any board change requires code/constants update.
+- Module and file: item / c_file_path (command_handler.c) — UART command handler implementing simple parsing/validation for commands over USART2.
+- Main function: uint8_t CommandHandler_PollCommand(uint8_t *cmd_out) — polls UART2 for a single byte; on valid input writes a parsed command (0–5) to cmd_out and returns 1; otherwise returns 0.
+- Control flow:
+  - Guard: if cmd_out is NULL, return 0.
+  - Attempt to receive 1 byte from huart2 via HAL_UART_Receive with a timeout of 10 (HAL units, typically milliseconds).
+  - If receive succeeds and byte is in ASCII range '0'–'5', convert to numeric (rx - '0'), store in *cmd_out, and return 1.
+  - For any failure, invalid byte, or timeout, return 0 without modifying output.
+- Dependencies:
+  - Headers: command_handler.h (local API), stm32f4xx_hal.h (STM32F4 HAL).
+  - External/global: extern UART_HandleTypeDef huart2; uses HAL_UART_Receive from STM32 HAL.
+- Behavior/semantics:
+  - Non-blocking-ish polling with short blocking window (up to ~10 ms per call).
+  - Accepts only ASCII digits 0–5 as valid commands; maps to numeric 0–5.
+- Error handling and validation:
+  - NULL pointer protection for cmd_out.
+  - Range check on received byte to ensure valid command.
+  - Binary return status: 1 = command parsed; 0 = no data/timeout/invalid input/error.
+- Assumptions:
+  - UART2 is initialized and accessible via huart2.
+  - ASCII encoding for incoming data.
+  - Caller repeatedly polls and provides a valid buffer to receive parsed command.
+- Notable risks/limitations:
+  - Polling can miss bytes if not called frequently; processes at most one byte per call, no buffering.
+  - Short blocking period may affect time-critical loops; not suitable for high-throughput streams.
+  - Not thread/ISR-safe if huart2 is accessed concurrently elsewhere without synchronization.
