@@ -1,24 +1,32 @@
-ag-code-summarizer Agent summary:
-
-- Location: Module "item", file "c_file_path" (command_handler.c) implements a simple UART command polling/validation routine.
-- Purpose: Poll UART2 for a single ASCII digit command and convert it to a numeric value (0–5) if valid.
-- Public API: uint8_t CommandHandler_PollCommand(uint8_t* cmd_out) — writes parsed command to cmd_out; returns 1 on success, 0 on failure/no command.
-- Key flow:
-  - Guards against NULL cmd_out (returns 0).
-  - Attempts to read 1 byte from huart2 via HAL_UART_Receive with a 10 ms timeout.
-  - If receive succeeds and byte is between '0' and '5', converts to numeric (rx - '0'), stores to cmd_out, returns 1; otherwise returns 0.
-- Dependencies:
-  - command_handler.h (interface declaration).
-  - stm32f4xx_hal.h and HAL UART API (HAL_UART_Receive).
-  - External UART handle: extern UART_HandleTypeDef huart2 (must be defined/configured elsewhere for USART2).
-- Behavior/assumptions:
-  - Polling style with short blocking (up to 10 ms) per call; intended for periodic invocation (e.g., main loop).
-  - Accepts only ASCII digits '0'–'5'; all other bytes are ignored.
-- Error handling/return conventions:
-  - Uses uint8_t as boolean (1 = command parsed, 0 = no command/error).
-  - Does not distinguish between timeout, HAL error, or invalid character; all return 0.
-  - Explicit NULL pointer protection present (“CH-06” note).
-- Notable risks:
-  - Uses a global UART instance (huart2); not reentrant/thread-safe and may conflict if other code also reads from the same UART.
-  - Potential data loss if bytes arrive faster than the polling rate; no buffering or framing beyond single-byte read.
-  - Blocking receive (even if short) may impact real-time responsiveness if called in time-critical paths.
+- Context: motor_controller.c (Module: item). Implements DC motor drive logic for HVAC flap positioning with requirement trace tags (SWE-REQ-003/004/008/009/010/013/014/015/035/047/054).
+- Purpose: Drive a DC motor via GPIO direction pins and a PWM channel to move an HVAC flap to discrete target positions using feedback from a position-sensing module; ensure safe states on init, completion, and fault.
+- Public API:
+  - MotorController_Init: Configures GPIOs, sets safe outputs, initializes internal state, starts PWM channel.
+  - MotorController_MoveTo(uint8_t target): Stores target, reads current position; if invalid or already at target → Abort; else sets direction pins based on target relation and starts PWM, marks movement active.
+  - MotorController_Update: Periodic; if moving, updates sensor, validates position, and stops (Abort) when PositionSensing_IsAtTarget(target) is true or sensor becomes invalid.
+  - MotorController_Abort: Forces safe stop (state stopped, clears direction pins, stops PWM).
+  - MotorController_GetState / MotorController_IsMoving: Read current state/flag.
+  - MotorController_GetTarget(uint8_t*): Returns stored target only when not moving, target < 6, and pointer non-null.
+- Key flow/state: Static state variables track motor state, target, and movement activity. Typical usage: Init once → MoveTo(desired) → call Update periodically until auto-stop at target or fault → optional Abort for immediate stop; getters allow status queries.
+- Hardware/dependencies:
+  - STM32 HAL (stm32f4xx_hal.h): uses HAL_GPIO_Init/WritePin and HAL_TIM_PWM_Start/Stop.
+  - Timer/PWM: extern TIM_HandleTypeDef htim3, uses TIM3 channel 1 (MOTOR_PWM_HANDLE/MOTOR_PWM_CHANNEL).
+  - GPIOs: Port B pins 0/1 as direction control (MOTOR_PIN_DIR_FWD, MOTOR_PIN_DIR_REV).
+  - position_sensing.h: PositionSensing_Update/GetPosition/IsAtTarget.
+  - motor_controller.h: exposes types (MotorState_t) and function prototypes.
+- Safety/error handling:
+  - Initializes and aborts to a safe state with both direction pins low and PWM stopped.
+  - Validates sensor readings: if PositionSensing_GetPosition fails in MoveTo or Update → Abort.
+  - Stops automatically when PositionSensing_IsAtTarget(target) is true.
+- Notable behaviors/assumptions:
+  - PWM is started in Init and again when movement begins; stopped in Abort. Assumes repeated start is safe/idem-potent in HAL.
+  - Direction logic is hardcoded by setting one pin high and the other low based on current vs target; naming (FWD/REV) may be inverted relative to motion semantics depending on wiring.
+  - Movement speed/duty cycle is not managed here (assumed preconfigured elsewhere).
+  - State is maintained in file-static variables without concurrency protection; assumes single-threaded/task-context calls.
+- Constraints:
+  - GetTarget enforces target range < 6 when returning a value; MoveTo does not validate target range before commanding motion.
+  - Requires periodic calls to MotorController_Update for target detection and fault handling.
+- Risks/edge cases:
+  - Lack of target range validation in MoveTo could command motion toward an unsupported position; relies on PositionSensing_IsAtTarget logic to terminate.
+  - Starting PWM in Init may be unnecessary; behavior depends on external timer configuration and driver idempotency.
+  - Abort is used for multiple cases (already at target, invalid sensor), which is appropriate but may obscure specific fault causes if higher layers need differentiation.
