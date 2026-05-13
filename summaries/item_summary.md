@@ -1,32 +1,28 @@
-- Context: motor_controller.c (Module: item). Implements DC motor drive logic for HVAC flap positioning with requirement trace tags (SWE-REQ-003/004/008/009/010/013/014/015/035/047/054).
-- Purpose: Drive a DC motor via GPIO direction pins and a PWM channel to move an HVAC flap to discrete target positions using feedback from a position-sensing module; ensure safe states on init, completion, and fault.
-- Public API:
-  - MotorController_Init: Configures GPIOs, sets safe outputs, initializes internal state, starts PWM channel.
-  - MotorController_MoveTo(uint8_t target): Stores target, reads current position; if invalid or already at target → Abort; else sets direction pins based on target relation and starts PWM, marks movement active.
-  - MotorController_Update: Periodic; if moving, updates sensor, validates position, and stops (Abort) when PositionSensing_IsAtTarget(target) is true or sensor becomes invalid.
-  - MotorController_Abort: Forces safe stop (state stopped, clears direction pins, stops PWM).
-  - MotorController_GetState / MotorController_IsMoving: Read current state/flag.
-  - MotorController_GetTarget(uint8_t*): Returns stored target only when not moving, target < 6, and pointer non-null.
-- Key flow/state: Static state variables track motor state, target, and movement activity. Typical usage: Init once → MoveTo(desired) → call Update periodically until auto-stop at target or fault → optional Abort for immediate stop; getters allow status queries.
-- Hardware/dependencies:
-  - STM32 HAL (stm32f4xx_hal.h): uses HAL_GPIO_Init/WritePin and HAL_TIM_PWM_Start/Stop.
-  - Timer/PWM: extern TIM_HandleTypeDef htim3, uses TIM3 channel 1 (MOTOR_PWM_HANDLE/MOTOR_PWM_CHANNEL).
-  - GPIOs: Port B pins 0/1 as direction control (MOTOR_PIN_DIR_FWD, MOTOR_PIN_DIR_REV).
-  - position_sensing.h: PositionSensing_Update/GetPosition/IsAtTarget.
-  - motor_controller.h: exposes types (MotorState_t) and function prototypes.
-- Safety/error handling:
-  - Initializes and aborts to a safe state with both direction pins low and PWM stopped.
-  - Validates sensor readings: if PositionSensing_GetPosition fails in MoveTo or Update → Abort.
-  - Stops automatically when PositionSensing_IsAtTarget(target) is true.
-- Notable behaviors/assumptions:
-  - PWM is started in Init and again when movement begins; stopped in Abort. Assumes repeated start is safe/idem-potent in HAL.
-  - Direction logic is hardcoded by setting one pin high and the other low based on current vs target; naming (FWD/REV) may be inverted relative to motion semantics depending on wiring.
-  - Movement speed/duty cycle is not managed here (assumed preconfigured elsewhere).
-  - State is maintained in file-static variables without concurrency protection; assumes single-threaded/task-context calls.
-- Constraints:
-  - GetTarget enforces target range < 6 when returning a value; MoveTo does not validate target range before commanding motion.
-  - Requires periodic calls to MotorController_Update for target detection and fault handling.
-- Risks/edge cases:
-  - Lack of target range validation in MoveTo could command motion toward an unsupported position; relies on PositionSensing_IsAtTarget logic to terminate.
-  - Starting PWM in Init may be unnecessary; behavior depends on external timer configuration and driver idempotency.
-  - Abort is used for multiple cases (already at target, invalid sensor), which is appropriate but may obscure specific fault causes if higher layers need differentiation.
+- Module: item; File: c_file_path — Purpose: Read flap position via ADC, map raw value to a logical index [0..5], track validity, and report if current reading is within defined stop ranges. Traced to SWE-REQ-013/014/015/016/017/018/019/020/040/041.
+- Key data/state: 
+  - s_stop_ranges[6]: per-position inclusive ADC windows for “at target” checks.
+  - Internal state: s_adc_value (last raw ADC), s_logical_position (mapped 0–5 or FLAP_POSITION_INVALID), s_position_valid (0/1).
+- Dependencies:
+  - position_sensing.h (decls, FLAP_POSITION_INVALID).
+  - STM32 HAL ADC (stm32f4xx_hal.h): HAL_ADC_Start, HAL_ADC_PollForConversion, HAL_ADC_GetValue.
+  - Extern ADC_HandleTypeDef hadc1 provided elsewhere.
+- Main functions:
+  - PositionSensing_Init(): clears state; logical position set to FLAP_POSITION_INVALID; validity cleared.
+  - PositionSensing_Update(): starts ADC, polls with timeout=2; on success reads ADC, maps via Position_GetFromADC(), sets validity=1; on failure sets logical to FLAP_POSITION_INVALID and validity=0.
+  - PositionSensing_GetPosition(uint8_t*): if validity=1 and pointer non-NULL, writes logical position and returns 1; else returns 0.
+  - PositionSensing_IsAtTarget(uint8_t target): returns 1 if 0<=target<6 and s_adc_value is within s_stop_ranges[target]; else 0.
+  - PositionSensing_IsValid(): returns s_position_valid (0/1).
+  - Static helper Position_GetFromADC(uint16_t): threshold-based mapping (>4000→0, >3750→1, >3480→2, >2500→3, >1000→4, else 5).
+- Operational flow: Client calls Init once; periodically calls Update to refresh s_adc_value and s_logical_position; queries IsValid/GetPosition for current logical index and IsAtTarget to see if raw ADC lies in a narrow per-position window.
+- Error handling/guards:
+  - ADC poll failure path marks reading invalid and resets logical position.
+  - Bounds check on target index in IsAtTarget.
+  - NULL pointer and validity checks in GetPosition.
+  - Uses 1U/0U as boolean return values.
+- Notable assumptions/risks:
+  - Hardcoded thresholds for mapping and separate narrow “at target” ranges; potential mismatch between coarse mapping bands and precise stop windows.
+  - Single-sample, no filtering/averaging/debouncing; may be noisy or jittery near thresholds.
+  - Poll timeout of 2 (likely ms) may be too short; failures clear validity.
+  - Requires Update to be called before queries; otherwise s_adc_value/logical may be stale.
+  - No concurrency/thread-safety; shared static state could be raced in ISR/RTOS contexts.
+  - Assumes ADC range consistent with thresholds (e.g., 12-bit ~0–4095); calibration not shown.
