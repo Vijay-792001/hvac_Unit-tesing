@@ -1,25 +1,33 @@
-- Purpose: Implements a simple UART command poller that reads one byte from USART2 and maps ASCII digits '0'–'5' to numeric commands 0–5.
-- Main function: CommandHandler_PollCommand(uint8_t* cmd_out) returns 1 if a valid command was read and stored, otherwise 0.
-- Key flow: 
-  1) Validate cmd_out is not NULL; 
-  2) Attempt HAL_UART_Receive(&huart2, &rx, 1, 10) with a 10 ms timeout; 
-  3) If receive OK and rx in '0'–'5', store rx - '0' into *cmd_out and return 1; 
-  4) Otherwise return 0.
-- Dependencies: 
-  - STM32 HAL (stm32f4xx_hal.h) for HAL_UART_Receive and UART types. 
-  - External UART handle huart2 (must be defined/initialized elsewhere). 
-  - Local header command_handler.h (declares the function/interface).
-- Interface/return convention: Boolean-like return (1 = success/valid command, 0 = no command/invalid/error). Outputs the parsed command via cmd_out.
-- Error handling: 
-  - Protects against NULL output pointer (immediately returns 0). 
-  - Treats HAL receive failures/timeouts as no command (returns 0). 
-  - Filters out non-digit or out-of-range bytes (returns 0).
-- Assumptions/limitations: 
-  - ASCII encoding for digit check. 
-  - Only commands 0–5 are valid; all other bytes are ignored. 
-  - Uses a fixed 10 ms blocking timeout; may impact timing in tight loops/RT contexts.
-- Notable risks: 
-  - Hard-coupled to huart2 (not easily reusable across UARTs). 
-  - No differentiation between timeout and hard errors. 
-  - Potential concurrency issues if other code/ISRs access huart2 simultaneously. 
-  - Single-byte polling may leave extra bytes in the RX queue unprocessed per call.
+- Purpose: DC motor control for HVAC flap positioning, implementing movement initiation, direction control, and safe stopping based on position feedback. Traced to SWE-REQ-003/004/008/009/010/013/014/015/035/047/054.
+- Public API:
+  - MotorController_Init: Configures GPIO PB0/PB1 as outputs, sets safe state, and starts PWM on TIM3 CH1.
+  - MotorController_MoveTo(target): Stores target, reads current position, sets direction pins, marks movement active, and starts PWM; aborts immediately if already at target or if position read fails.
+  - MotorController_Update: Periodic; updates sensor, stops motor when PositionSensing_IsAtTarget(target) reports true; aborts on invalid sensor data.
+  - MotorController_Abort: Sets state to STOPPED, deactivates movement, drives both direction pins low, and stops PWM.
+  - Accessors: MotorController_GetState, MotorController_IsMoving, MotorController_GetTarget (returns target only when not moving and target < 6).
+- Key control flow:
+  - Init → safe outputs and PWM ready.
+  - MoveTo → decide direction based on current vs target; start motion.
+  - Update loop → poll sensor, stop at target or on invalid reading.
+  - Abort → centralized safe shutdown used by MoveTo/Update.
+- Dependencies and hardware interfaces:
+  - STM32F4 HAL: GPIO and TIM PWM (extern TIM_HandleTypeDef htim3; uses TIM_CHANNEL_1).
+  - GPIO: PORTB, PIN0 (FWD), PIN1 (REV) for H-bridge direction.
+  - position_sensing module: PositionSensing_GetPosition, PositionSensing_Update, PositionSensing_IsAtTarget.
+  - motor_controller.h provides MotorState_t and function prototypes.
+- State management: s_motor_state (STOPPED/MOVING_FWD/MOVING_REV), s_target_position (uint8), s_movement_active (bool-like).
+- Safety/error handling:
+  - Initializes and aborts to a safe state (both direction pins low, PWM stopped).
+  - Aborts if sensor read fails/out-of-range or if already at target.
+  - Movement only proceeds when valid position data is available.
+- Assumptions/constraints:
+  - PWM configuration (duty, frequency) is pre-set elsewhere; this module only starts/stops it.
+  - Target validity is not enforced in MoveTo; correctness relies on PositionSensing_IsAtTarget and the application. GetTarget enforces target < 6 only when reporting.
+  - No motion timeout or stall detection; relies on sensor validity to terminate abnormal motion.
+- Notable implementation details:
+  - PWM is started in Init and again in MoveTo (redundant but benign); Abort stops it.
+  - Direction control ensures only one direction pin is high at a time; no explicit dead-time management.
+  - Update uses PositionSensing_IsAtTarget instead of comparing raw positions, enabling abstraction of tolerances/hysteresis to the sensing module.
+- Potential risks:
+  - If PositionSensing_IsAtTarget never becomes true (e.g., miscalibration) yet readings remain “valid,” motor may run indefinitely until external limits intervene.
+  - Lack of range checks on target in MoveTo and absence of end-stop protection or current-limit feedback could stress hardware if commanded beyond physical limits or on blockage.
