@@ -1,24 +1,21 @@
-- Purpose: Implements a simple UART command handler that polls UART2 for a single-byte ASCII digit and, if valid, converts it to a numeric command (0–5).
-- File/Module: command_handler.c (module: item). Public API provided via command_handler.h.
-- Main function: uint8_t CommandHandler_PollCommand(uint8_t* cmd_out)
-  - Inputs: cmd_out pointer to store parsed command (0–5).
-  - Returns: 1 on success (valid command stored), 0 on failure (no/invalid data or error).
-- Key flow:
-  - Guard: If cmd_out is NULL, immediately return 0 (NULL pointer protection).
-  - UART read: Attempt to receive 1 byte from huart2 with a 10 ms timeout using HAL_UART_Receive.
-  - Validation: If received byte is between '0' and '5', convert to numeric by subtracting '0', write to *cmd_out, return 1; otherwise return 0.
-- Dependencies:
-  - STM32 HAL: stm32f4xx_hal.h for HAL_UART_Receive and types.
-  - External UART handle: extern UART_HandleTypeDef huart2 must be initialized elsewhere.
-  - Local header: command_handler.h for the function declaration.
-- Behavior/usage notes:
-  - Polling-style, but uses a blocking HAL receive with a short (10 ms) timeout per call.
-  - Consumes exactly one received byte per call; invalid bytes are discarded (no output written).
-  - Only accepts ASCII digits '0'..'5'; outputs numeric 0..5.
-- Error handling:
-  - Returns 0 on NULL output pointer, HAL receive failure/timeout, or invalid character.
-  - No errno or detailed error codes; boolean-style success/fail via uint8_t.
-- Assumptions/risks:
-  - Not thread-safe; relies on global huart2 and assumes no concurrent UART use (e.g., IRQ/DMA) on the same handle.
-  - Potential to miss queued bytes if producer is faster than the polling cadence (reads only one byte per call).
-  - Blocking wait (up to 10 ms) may impact real-time responsiveness if called in time-critical paths.
+ag-code-summarizer Agent
+
+- Module/File: item / c_file_path — DC motor drive logic for HVAC flap positioning; traceable to SWE-REQ-003/004/008/009/010/013/014/015/035/047/054.
+- Purpose: Control a DC motor via GPIO direction pins and a PWM channel to move a flap to a sensed target position, with safe startup/stop behavior and periodic supervision.
+- Key dependencies/hardware bindings: STM32 HAL (stm32f4xx_hal.h), TIM3 PWM channel 1 (extern TIM_HandleTypeDef htim3), GPIOB pins PB0/PB1 for direction, and Position Sensing module (position_sensing.h: PositionSensing_Update/GetPosition/IsAtTarget). Public types/protos come from motor_controller.h (MotorState_t).
+- Internal state: s_motor_state (STOPPED/MOVING_FWD/MOVING_REV), s_target_position (uint8_t), s_movement_active (uint8_t) to track command and motion lifecycle.
+- Main functions:
+  - MotorController_Init: Configures PB0/PB1 as push-pull outputs, drives both low (safe), initializes state/target/movement flags, and starts the PWM channel.
+  - MotorController_MoveTo(target): Stores target; reads current position; if already at target, aborts; else selects direction by comparing current vs target (sets one dir pin high, the other low), marks movement active, and starts PWM; aborts if position read fails.
+  - MotorController_Update: Periodic supervision; refreshes sensing, and if moving, stops the motor when PositionSensing_IsAtTarget(target) is true; aborts on invalid/out-of-range sensor feedback.
+  - MotorController_Abort: Safe stop—state STOPPED, movement flag cleared, both dir pins low, PWM stopped.
+  - Query helpers: MotorController_GetState, MotorController_IsMoving, MotorController_GetTarget(out) which only returns a value when not moving and s_target_position < 6.
+- Control flow: Init -> MoveTo issues motion (sets direction + PWM) -> Update called periodically to stop on reaching target or on sensing error -> Abort used for immediate/safe stop and also by other paths (already at target, invalid sensor).
+- Error handling/safety: Defaults to safe outputs at init and abort; movement is prevented/stopped if position read fails; avoids unnecessary motion if at target; uses s_movement_active to gate update logic.
+- Notable assumptions/risks:
+  - No validation of target range in MoveTo; only GetTarget enforces target < 6, so out-of-range targets could cause indefinite motion until external abort or sensor error.
+  - PWM duty cycle/speed is assumed preconfigured elsewhere; this module only starts/stops PWM.
+  - No timeout/stall detection or end-stop protection; relies solely on PositionSensing to detect achieving target.
+  - HAL_TIM_PWM_Start is called in Init and again on MoveTo (typically harmless but redundant); concurrency/thread-safety not addressed (assumes single-threaded/main-loop).
+
+---
