@@ -1,25 +1,23 @@
-- Purpose (Module: item, File: c_file_path): Implements control of a power LED and up to five position-indication LEDs on an STM32F4 device, mapping a validated logical position to a single lit LED and maintaining power LED state.
-- Public API:
-  - StatusIndicator_Init(): Configures GPIOs and sets initial LED states (power ON, all position LEDs OFF).
-  - StatusIndicator_Update(uint8_t position_valid, uint8_t logical_position): Turns OFF all position LEDs, then lights exactly one LED if position is valid and within range.
-  - StatusIndicator_SetPowerLED(uint8_t onoff): Sets the power LED ON (nonzero) or OFF (zero).
-- Key flows/logic:
-  - Initialization sets GPIOC pins (PC0–PC5) to output push-pull, no pull, low speed; then sets power LED high and clears all position LEDs.
-  - Update sequence always clears all position LEDs first to ensure exclusivity, then lights s_led_pos_pins[logical_position-1] when position_valid != 0 and logical_position ∈ [1, STATUS_INDICATOR_NUM]; logical_position 0 results in no green LED.
-- LED mapping: s_led_pos_pins is a 5-element array {PC1..PC5}; STATUS_INDICATOR_NUM (presumably 5) must match this array length. Mapping is 1-based input to 0-based array (1→index 0, …, 5→index 4).
-- Dependencies:
-  - Headers: status_indicator.h (decls, STATUS_INDICATOR_NUM), stm32f4xx_hal.h (HAL GPIO).
-  - HAL APIs/types/macros: HAL_GPIO_Init, HAL_GPIO_WritePin, GPIO_InitTypeDef, GPIO_MODE_OUTPUT_PP, GPIO_NOPULL, GPIO_SPEED_FREQ_LOW, GPIOC, GPIO_PIN_x.
-  - Assumes RCC clock enable for GPIOC occurs elsewhere.
-- Configuration details:
-  - Power LED: LED_POWER_PORT=GPIOC, LED_POWER_PIN=GPIO_PIN_0.
-  - Position LEDs share port GPIOC with pins PC1–PC5.
-- Error handling/safeguards:
-  - Bounds check on logical_position and validity flag prevents out-of-range access; out-of-range or invalid leaves all position LEDs OFF.
-  - No return codes or HAL error checks; assumes HAL calls succeed.
-- Notable assumptions/risks:
-  - STATUS_INDICATOR_NUM must equal the s_led_pos_pins array size; mismatch would risk out-of-bounds.
-  - Clearing all LEDs before setting one may cause visible flicker if Update is called at high rates.
-  - onoff treats any nonzero as ON; no strict boolean enforcement.
-  - Uses a shared static GPIO_InitTypeDef; functions are not re-entrant and make no concurrency/thread-safety guarantees.
-- Traceability: File header cites requirement IDs SWE-REQ-021/022/023/024/025/026/027/029/044, implying coverage of power and position LED behaviors.
+- Purpose (c_file_path, module: item): Implements a simple UART command polling/validation routine for STM32F4, translating single ASCII digit inputs into numeric command codes.
+- Main function: uint8_t CommandHandler_PollCommand(uint8_t *cmd_out) — polls UART2 for one byte and, if valid, writes a command value 0–5 to cmd_out; returns 1 on success, 0 otherwise.
+- Control flow:
+  - Guards against NULL cmd_out (returns 0).
+  - Calls HAL_UART_Receive(&huart2, &rx, 1, 10) to read 1 byte with a 10 ms timeout.
+  - If receive is HAL_OK and rx is between '0' and '5' inclusive, writes (rx - '0') to cmd_out and returns 1; otherwise returns 0 without modifying cmd_out.
+- Dependencies and interfaces:
+  - Includes command_handler.h (local API) and stm32f4xx_hal.h (STM32 HAL).
+  - Uses external UART_HandleTypeDef huart2 (assumes it is initialized/configured elsewhere).
+  - Relies on HAL_UART_Receive for blocking read with timeout.
+- Behavior/semantics:
+  - Accepts only ASCII digits '0'..'5' and maps to uint8_t 0..5; all other bytes are ignored.
+  - Non-buffered, single-byte polling intended to be called repeatedly from a main loop or scheduler.
+- Error handling and return conventions:
+  - Returns 0 for NULL output pointer, HAL receive failures/timeouts, or invalid input bytes; returns 1 only on valid digit reception.
+  - Leaves cmd_out unchanged on failure/invalid input (caller must honor the return value to avoid using stale data).
+- Constraints/assumptions:
+  - Synchronous, potentially blocking up to 10 ms per call due to HAL timeout.
+  - No framing, delimiter handling, or multi-byte parsing; no echo/feedback to sender.
+- Notable risks:
+  - Silent drop of non-'0'..'5' inputs; no diagnostics.
+  - Potential contention if other code also uses huart2.
+  - Depends on HAL state; no checks for huart2 init or UART errors beyond HAL_OK.
