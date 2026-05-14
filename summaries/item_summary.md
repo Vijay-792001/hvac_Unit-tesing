@@ -1,27 +1,29 @@
-- Purpose: status_indicator.c controls a power LED and up to STATUS_INDICATOR_NUM “position” LEDs on an STM32F4, mapping a validated logical position to a single LED and exposing simple APIs to initialize and update LED states. Traceability: SWE-REQ-021, -022, -023, -024, -025, -026, -027, -029, -044.
-- Module/File: Module = item; File = c_file_path (implementation comment header: status_indicator.c).
-- Public APIs:
-  - StatusIndicator_Init(): Configures GPIOC pins (power: PC0, positions: PC1–PC5) as push-pull outputs; turns the power LED ON and all position LEDs OFF.
-  - StatusIndicator_Update(uint8_t position_valid, uint8_t logical_position): Clears all position LEDs, then if position_valid != 0 and logical_position in 1..STATUS_INDICATOR_NUM, turns ON exactly one position LED corresponding to logical_position (1→PC1 … 5→PC5).
-  - StatusIndicator_SetPowerLED(uint8_t onoff): Explicitly sets power LED ON (1) or OFF (0).
-- Key flows:
-  - Initialization: Builds a combined pin mask (PC0–PC5), configures as output, no pull, low speed via HAL_GPIO_Init(GPIOC,...); sets initial state (power on, positions off).
-  - Update cycle: First resets all position LEDs; then conditionally lights the one LED indexed by logical_position - 1.
-- Data and mappings:
-  - LED ports: LED_POWER_PORT = GPIOC, LED_POS_PORT = GPIOC.
-  - Pins: Power = GPIO_PIN_0; Positions held in s_led_pos_pins[] = { GPIO_PIN_1 … GPIO_PIN_5 } sized by STATUS_INDICATOR_NUM.
-- Dependencies/assumptions:
-  - Requires STM32 HAL (stm32f4xx_hal.h) and the module header status_indicator.h (defines prototypes and STATUS_INDICATOR_NUM).
-  - Assumes GPIOC clock is enabled elsewhere (no RCC enable here).
-  - Assumes LEDs are active-high and physically wired to PC0–PC5 as defined.
-  - STATUS_INDICATOR_NUM must match the number of initialized pins; if greater than 5, trailing zeros in s_led_pos_pins could cause writes to an invalid pin mask; if less than 5, compilation fails due to excess initializers.
-- Validation and bounds handling:
-  - logical_position is range-checked (1..STATUS_INDICATOR_NUM) and gated by position_valid before indexing s_led_pos_pins, preventing out-of-bounds when STATUS_INDICATOR_NUM aligns with the array.
-  - Position 0 or invalid inputs result in all position LEDs OFF.
-- Error handling and robustness:
-  - No return values or status reporting; HAL functions used return void, and no error paths are surfaced.
-  - No concurrency protection; functions are not re-entrant safe if called from multiple contexts simultaneously.
-- Notable omissions/risks:
-  - No deinit function; no blinking/timing behavior; no power-saving modes.
-  - Hardware coupling (fixed to GPIOC and specific pins) reduces portability.
-  - Static global GPIO_InitTypeDef reused locally; benign here but shared state could confuse future extensions.
+- Purpose: Implements a simple UART command poller/validator for STM32F4, converting single ASCII digit commands into numeric values. File: c_file_path (commented as command_handler.c). Module: item.
+- Main function: uint8_t CommandHandler_PollCommand(uint8_t* cmd_out)
+  - Input: pointer to output byte (cmd_out).
+  - Output: writes parsed command (0–5) to *cmd_out on success.
+  - Return: 1 on success (valid command received), 0 otherwise.
+- Control flow:
+  - Guards against NULL cmd_out; returns 0 immediately if NULL.
+  - Attempts to read 1 byte from UART2 with a 10 ms timeout via HAL_UART_Receive.
+  - On HAL_OK, validates the byte is an ASCII digit '0'–'5'.
+  - If valid, converts to numeric (rx - '0'), stores to *cmd_out, returns 1; else returns 0.
+- Dependencies:
+  - Headers: command_handler.h (local interface), stm32f4xx_hal.h (STM32 HAL).
+  - External handle: extern UART_HandleTypeDef huart2 (must be initialized elsewhere).
+  - HAL API: HAL_UART_Receive(&huart2, &rx, 1, 10).
+- Behavior/assumptions:
+  - Expects ASCII input; only digits '0'–'5' are considered valid commands.
+  - Polling style with short blocking wait (up to ~10 ms) per call.
+  - Single-byte, stateless parsing; no buffering or multi-character protocol handling.
+- Error handling:
+  - NULL pointer protection (returns 0).
+  - HAL receive errors/timeouts result in 0 (no distinction among error types).
+  - Invalid characters outside '0'–'5' are ignored (return 0) without feedback.
+- Notable constraints/risks:
+  - Uses global UART handle; not re-entrant/thread-safe without external synchronization.
+  - The 10 ms timeout introduces bounded blocking; frequent calls could affect real-time responsiveness.
+  - No handling of framing (e.g., CR/LF) or command delimiters; stray bytes are silently discarded.
+- Side effects and resources:
+  - No dynamic memory; interacts with UART2 peripheral only.
+  - Leaves rx uninitialized if receive fails, but it is not used in that case.
