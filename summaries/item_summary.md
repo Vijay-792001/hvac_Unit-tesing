@@ -1,36 +1,42 @@
-ag-code-summarizer Agent summary
+ag-code-summarizer Agent
 
-- Context: Module = item; File = c_file_path. Purpose: Poll UART2 for a single-byte command and validate it as a digit 0–5, returning the parsed numeric value via output pointer.
-- Public API: uint8_t CommandHandler_PollCommand(uint8_t* cmd_out) — returns 1 on success (valid command received and parsed), 0 otherwise.
-- Control flow: 
-  - Guard against NULL cmd_out (returns 0).
-  - HAL_UART_Receive(&huart2, &rx, 1, 10) attempts to read one byte with a short timeout.
-  - If receive OK and rx is ASCII '0'..'5', convert to numeric (rx - '0'), store in *cmd_out, return 1; else return 0.
-- Dependencies: 
-  - STM32 HAL (stm32f4xx_hal.h), specifically HAL_UART_Receive and HAL_OK.
-  - External UART handle huart2 (extern UART_HandleTypeDef huart2) — assumes UART2 is initialized elsewhere.
-  - command_handler.h for the function’s declaration.
-- Inputs/outputs: 
-  - Input: pointer to uint8_t where parsed command will be stored.
-  - Output: sets *cmd_out to 0–5 on success; function returns 1 (success) or 0 (failure/no valid command).
-- Error handling and edge cases: 
-  - NULL pointer protection (commented as CH-06) returns 0.
-  - UART receive timeout/error (non-HAL_OK) returns 0.
-  - Non-digit or out-of-range received byte returns 0 without modifying cmd_out.
-- Operational characteristics/assumptions: 
-  - Polling with a blocking call and a short (10 ms) timeout; no interrupt/DMA usage.
-  - Accepts only single-byte commands '0'..'5' (ASCII), ignores others (e.g., CR/LF).
-  - Tight coupling to UART2 via global handle; no abstraction for other UARTs.
-- Notable risks/limitations: 
-  - Potential CPU blocking during receive; may affect real-time behavior if called frequently.
-  - No concurrency protection; undefined behavior if huart2 is used elsewhere concurrently.
-  - No framing/checksum; multi-byte protocols or noise may cause missed or discarded input.
+- Purpose: Implements DC motor control for HVAC flap positioning using GPIO direction control and PWM speed/drive on STM32F4; traces to multiple SWE requirements (notably SWE-REQ-009 safe init/move and SWE-REQ-010 stop-at-target logic). Module: item, File: c_file_path.
+
+- Public API:
+  - MotorController_Init: Configures direction GPIOs, sets safe outputs, initializes state, and starts PWM channel.
+  - MotorController_MoveTo(target): Stores target, reads current via PositionSensing; if already at target or sensor invalid, aborts; else sets direction pins and motor state, marks movement active, ensures PWM running.
+  - MotorController_Update: If moving, refreshes position sensing; aborts when PositionSensing_IsAtTarget(target) or when sensing is invalid/out-of-range.
+  - MotorController_Abort: Stops PWM, resets direction pins to safe, clears movement flag, sets state to STOPPED.
+  - MotorController_GetState / MotorController_IsMoving: Report current state and movement flag.
+  - MotorController_GetTarget(out): If not moving, target < 6, and pointer valid, returns stored target and 1; else returns 0.
+
+- Key flow:
+  - Initialization sets outputs to safe (both direction pins RESET), records STOPPED/idle state, and starts PWM.
+  - Move command determines direction by comparing current vs. target; sets one direction pin SET and the other RESET, updates state to MOVING_FWD/REV, and runs PWM.
+  - Periodic Update must be called while moving; it updates sensing, and halts precisely when PositionSensing indicates target reached or when sensing is invalid.
+  - Abort centralizes all stop/safe handling (GPIO low, PWM stop, flags/state reset).
+
+- Static state/config:
+  - s_motor_state, s_target_position (uint8), s_movement_active (flag).
+  - Hardware bindings via macros: TIM3 CH1 for PWM (extern TIM_HandleTypeDef htim3), GPIOB pins 0/1 for forward/reverse lines.
+
+- Dependencies:
+  - STM32 HAL: GPIO (HAL_GPIO_Init/WritePin) and TIM PWM (HAL_TIM_PWM_Start/Stop).
+  - position_sensing module: PositionSensing_Update, PositionSensing_GetPosition(uint8_t*), PositionSensing_IsAtTarget(uint8_t).
+  - Hardware H-bridge/driver tied to two GPIO direction pins and a PWM signal.
+
+- Error handling and safety:
+  - Safe outputs enforced at init and on abort (both direction lines low, PWM off).
+  - Sensor failure/invalid reading triggers immediate abort in both MoveTo and Update.
+  - MoveTo short-circuits to abort if already at target (prevents unnecessary motion).
+
+- Notable assumptions/risks:
+  - No range validation on MoveTo’s target; only GetTarget enforces target < 6 (implies expected discrete positions 0–5). Mismatch could allow out-of-range commands.
+  - No timeout, stall detection, current/temperature/end-stop protection; motor could run indefinitely if sensor reports valid but never reaches target.
+  - Direction pin polarity is hardware-specific; code sets one pin RESET and the other SET per direction—assumes correct active levels for the driver.
+  - Concurrency/reentrancy not addressed; globals are non-volatile and functions appear intended for single-threaded/polling use.
+  - PWM is started in Init and again in MoveTo; redundant but harmless with HAL. Duty/speed configuration is assumed to be handled elsewhere.
 
 ---
 
 Task is completed
-
-Action:
-- Use GitHub MCP push_files to create/update summary_path with content.
-Return ONLY JSON:
-{"path":"summaries/item_summary.md","status":"uploaded"}
