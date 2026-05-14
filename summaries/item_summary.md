@@ -1,27 +1,13 @@
-- Purpose: Implements flap position sensing via a single ADC reading on STM32F4, mapping raw ADC values to a logical position index (0–5), and determining if the mechanism is within calibrated stop windows. Traceability: SWE-REQ-013..020, -040, -041. Module: item, File: c_file_path.
-- Key data and state:
-  - PositionStopRange_t and s_stop_ranges[6]: calibrated ADC min/max windows for each stop index 0..5.
-  - Internal state: s_adc_value (last raw ADC), s_logical_position (0..5 or FLAP_POSITION_INVALID), s_position_valid (flag).
-  - Static mapper Position_GetFromADC(adc): threshold-based mapping (>4000→0, >3750→1, >3480→2, >2500→3, >1000→4, else 5).
-- Public API and flow:
-  - PositionSensing_Init(): resets ADC value to 0, logical position to FLAP_POSITION_INVALID, validity to 0.
-  - PositionSensing_Update(): starts ADC (HAL_ADC_Start), polls with timeout 2 (HAL_ADC_PollForConversion); on success reads value, updates s_adc_value, maps to logical position, sets validity=1; on failure sets logical position invalid and validity=0 (s_adc_value remains unchanged).
-  - PositionSensing_GetPosition(uint8_t*): if valid and pointer non-null, writes current logical position and returns 1; else returns 0.
-  - PositionSensing_IsValid(): returns s_position_valid.
-  - PositionSensing_IsAtTarget(uint8_t target): if target<6 and s_adc_value within s_stop_ranges[target], returns 1; else 0.
-- Dependencies and external interfaces:
-  - Headers: position_sensing.h (defines FLAP_POSITION_INVALID, prototypes), stm32f4xx_hal.h.
-  - External ADC handle hadc1; uses STM32 HAL ADC APIs: HAL_ADC_Start, HAL_ADC_PollForConversion, HAL_ADC_GetValue.
-- Control logic separation:
-  - Coarse position classification via fixed thresholds (Position_GetFromADC).
-  - Precise “at target” determination via narrow calibrated ranges s_stop_ranges per index.
-- Error handling and edge cases:
-  - ADC poll timeout/failure: marks position invalid and logical position invalid; note s_adc_value is not updated on failure.
-  - GetPosition checks both validity and null pointer.
-  - IsAtTarget guards invalid target indices (>=6) by returning 0.
+- Purpose (Module: item, File: c_file_path): Implements LED control for a power indicator and up to five position (status) LEDs on an STM32F4. Maps logical positions 1–5 to individual LEDs; position 0 or invalid turns all position LEDs off. Traces to SWE-REQ-021/022/023/024/025/026/027/029/044.
+- Key dependencies: status_indicator.h (prototypes, STATUS_INDICATOR_NUM), stm32f4xx_hal.h (GPIO HAL). Uses HAL_GPIO_Init and HAL_GPIO_WritePin. Requires GPIOC clock to be enabled elsewhere before initialization.
+- Hardware mapping/defs: All LEDs on GPIOC. Power LED on PC0. Position LEDs on PC1–PC5 via s_led_pos_pins array. Configured as push-pull outputs, no pull, low speed.
+- StatusIndicator_Init(void): Configures PC0–PC5 as outputs via HAL_GPIO_Init(GPIOC, …). Turns power LED ON; turns all position LEDs OFF.
+- StatusIndicator_Update(uint8_t position_valid, uint8_t logical_position): First turns all position LEDs OFF. If position_valid != 0 and 1 ≤ logical_position ≤ STATUS_INDICATOR_NUM, turns ON exactly one LED at index logical_position - 1 (i.e., pos 1→PC1, …, pos 5→PC5). Otherwise leaves all position LEDs OFF.
+- StatusIndicator_SetPowerLED(uint8_t onoff): Simple setter; nonzero turns power LED ON, zero turns it OFF.
+- Control flow/usage: Call Init once after HAL setup and GPIOC clock enable. Periodically call Update with current validity/position to reflect state. Call SetPowerLED as needed to reflect power state.
 - Notable assumptions/risks:
-  - s_stop_ranges and mapping thresholds are hardcoded; require calibration maintenance and may drift over time.
-  - No hysteresis/debouncing; near-threshold noise may cause position chatter between indices.
-  - IsAtTarget does not consult s_position_valid; it uses the last s_adc_value, which may be stale after a failure (possible false positive if last valid value was in-range).
-  - Short poll timeout (2 units) may be insufficient depending on HAL tick/timebase, potentially causing frequent invalid states.
-  - Not thread-safe/re-entrant; relies on a global ADC handle and static state.
+  - No explicit error handling or return codes; HAL call results are not checked.
+  - Input validation limited to bounds/validity check in Update; other functions assume valid ports/pins.
+  - Hard-coded HAL_GPIO_Init uses GPIOC directly (not LED_*_PORT macros); changing ports requires updating this call too.
+  - Assumes LED polarity where GPIO_PIN_SET turns LED ON.
+  - Concurrency not addressed; repeated “all off then one on” may momentarily blank LEDs if timing-sensitive.
