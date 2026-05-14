@@ -1,42 +1,11 @@
 ag-code-summarizer Agent
 
-- Purpose: Implements DC motor control for HVAC flap positioning using GPIO direction control and PWM speed/drive on STM32F4; traces to multiple SWE requirements (notably SWE-REQ-009 safe init/move and SWE-REQ-010 stop-at-target logic). Module: item, File: c_file_path.
-
-- Public API:
-  - MotorController_Init: Configures direction GPIOs, sets safe outputs, initializes state, and starts PWM channel.
-  - MotorController_MoveTo(target): Stores target, reads current via PositionSensing; if already at target or sensor invalid, aborts; else sets direction pins and motor state, marks movement active, ensures PWM running.
-  - MotorController_Update: If moving, refreshes position sensing; aborts when PositionSensing_IsAtTarget(target) or when sensing is invalid/out-of-range.
-  - MotorController_Abort: Stops PWM, resets direction pins to safe, clears movement flag, sets state to STOPPED.
-  - MotorController_GetState / MotorController_IsMoving: Report current state and movement flag.
-  - MotorController_GetTarget(out): If not moving, target < 6, and pointer valid, returns stored target and 1; else returns 0.
-
-- Key flow:
-  - Initialization sets outputs to safe (both direction pins RESET), records STOPPED/idle state, and starts PWM.
-  - Move command determines direction by comparing current vs. target; sets one direction pin SET and the other RESET, updates state to MOVING_FWD/REV, and runs PWM.
-  - Periodic Update must be called while moving; it updates sensing, and halts precisely when PositionSensing indicates target reached or when sensing is invalid.
-  - Abort centralizes all stop/safe handling (GPIO low, PWM stop, flags/state reset).
-
-- Static state/config:
-  - s_motor_state, s_target_position (uint8), s_movement_active (flag).
-  - Hardware bindings via macros: TIM3 CH1 for PWM (extern TIM_HandleTypeDef htim3), GPIOB pins 0/1 for forward/reverse lines.
-
-- Dependencies:
-  - STM32 HAL: GPIO (HAL_GPIO_Init/WritePin) and TIM PWM (HAL_TIM_PWM_Start/Stop).
-  - position_sensing module: PositionSensing_Update, PositionSensing_GetPosition(uint8_t*), PositionSensing_IsAtTarget(uint8_t).
-  - Hardware H-bridge/driver tied to two GPIO direction pins and a PWM signal.
-
-- Error handling and safety:
-  - Safe outputs enforced at init and on abort (both direction lines low, PWM off).
-  - Sensor failure/invalid reading triggers immediate abort in both MoveTo and Update.
-  - MoveTo short-circuits to abort if already at target (prevents unnecessary motion).
-
-- Notable assumptions/risks:
-  - No range validation on MoveTo’s target; only GetTarget enforces target < 6 (implies expected discrete positions 0–5). Mismatch could allow out-of-range commands.
-  - No timeout, stall detection, current/temperature/end-stop protection; motor could run indefinitely if sensor reports valid but never reaches target.
-  - Direction pin polarity is hardware-specific; code sets one pin RESET and the other SET per direction—assumes correct active levels for the driver.
-  - Concurrency/reentrancy not addressed; globals are non-volatile and functions appear intended for single-threaded/polling use.
-  - PWM is started in Init and again in MoveTo; redundant but harmless with HAL. Duty/speed configuration is assumed to be handled elsewhere.
-
----
-
-Task is completed
+- Purpose: Implements flap position sensing by reading an ADC (STM32 HAL), mapping raw values to logical flap indices (0–5), exposing validity and target-attainment checks; traceable to SWE-REQ-013…020, 040, 041. Module: item; File: c_file_path.
+- Key dependencies: stm32f4xx_hal.h (HAL ADC API), external ADC handle hadc1; position_sensing.h for public API and FLAP_POSITION_INVALID definition; 12-bit ADC implied (values up to ~4095).
+- Static data/state: s_adc_value (last raw ADC), s_logical_position (0–5 or FLAP_POSITION_INVALID), s_position_valid flag; calibration table s_stop_ranges[6] with tight [min,max] windows per logical position used to verify “at target.”
+- Initialization flow (PositionSensing_Init): Resets adc value to 0, sets logical position to FLAP_POSITION_INVALID and validity to 0 (SWE-REQ-040).
+- Update/read flow (PositionSensing_Update): Starts ADC, polls with short timeout (2), on success stores raw ADC, maps to logical via thresholds (Position_GetFromADC), sets valid=1; on failure marks position invalid and valid=0. Blocking call for the poll duration.
+- Mapping logic (static Position_GetFromADC): Hard-coded descending thresholds map raw ADC to indices: >4000→0, >3750→1, >3480→2, >2500→3, >1000→4, else→5. Independent of s_stop_ranges; no hysteresis or smoothing.
+- Target check (PositionSensing_IsAtTarget): Validates target index <6, then returns 1 if current raw ADC is within the corresponding [min,max] range in s_stop_ranges; otherwise 0. Uses last sampled s_adc_value.
+- Retrieval/validity APIs: PositionSensing_GetPosition returns 1 and writes current logical position to pos_out only if s_position_valid==1 and pos_out!=NULL (SWE-REQ-019); PositionSensing_IsValid returns the validity flag (SWE-REQ-017).
+- Notable risks/assumptions: Tight stop ranges (±10 counts) may be noise-sensitive; thresholds and ranges are fixed (no calibration/adaptation); no concurrency protection (static globals, not re-entrant/ISR-safe); relies on external hadc1 being initialized; assumes 6 discrete stops; validity depends solely on last ADC poll success; no range/overflow checks on raw ADC beyond mapping; minimal error handling (ADC poll failure, invalid target, null pointer).
