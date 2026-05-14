@@ -1,29 +1,15 @@
-- Purpose: Implements a simple UART command poller/validator for STM32F4, converting single ASCII digit commands into numeric values. File: c_file_path (commented as command_handler.c). Module: item.
-- Main function: uint8_t CommandHandler_PollCommand(uint8_t* cmd_out)
-  - Input: pointer to output byte (cmd_out).
-  - Output: writes parsed command (0–5) to *cmd_out on success.
-  - Return: 1 on success (valid command received), 0 otherwise.
-- Control flow:
-  - Guards against NULL cmd_out; returns 0 immediately if NULL.
-  - Attempts to read 1 byte from UART2 with a 10 ms timeout via HAL_UART_Receive.
-  - On HAL_OK, validates the byte is an ASCII digit '0'–'5'.
-  - If valid, converts to numeric (rx - '0'), stores to *cmd_out, returns 1; else returns 0.
-- Dependencies:
-  - Headers: command_handler.h (local interface), stm32f4xx_hal.h (STM32 HAL).
-  - External handle: extern UART_HandleTypeDef huart2 (must be initialized elsewhere).
-  - HAL API: HAL_UART_Receive(&huart2, &rx, 1, 10).
-- Behavior/assumptions:
-  - Expects ASCII input; only digits '0'–'5' are considered valid commands.
-  - Polling style with short blocking wait (up to ~10 ms) per call.
-  - Single-byte, stateless parsing; no buffering or multi-character protocol handling.
-- Error handling:
-  - NULL pointer protection (returns 0).
-  - HAL receive errors/timeouts result in 0 (no distinction among error types).
-  - Invalid characters outside '0'–'5' are ignored (return 0) without feedback.
-- Notable constraints/risks:
-  - Uses global UART handle; not re-entrant/thread-safe without external synchronization.
-  - The 10 ms timeout introduces bounded blocking; frequent calls could affect real-time responsiveness.
-  - No handling of framing (e.g., CR/LF) or command delimiters; stray bytes are silently discarded.
-- Side effects and resources:
-  - No dynamic memory; interacts with UART2 peripheral only.
-  - Leaves rx uninitialized if receive fails, but it is not used in that case.
+- Module/file: item / c_file_path (motor_controller.c). Purpose: drive a DC motor for HVAC flap positioning using an STM32 HAL PWM (TIM3 CH1) and two GPIO direction pins (PB0/PB1). Implements move-to-position logic tied to position sensing; traces to multiple SWE-REQs (notably SWE-REQ-009, -010).
+- Static config/state: uses external TIM_HandleTypeDef htim3; defines MOTOR_PWM_CHANNEL TIM_CHANNEL_1; direction pins MOTOR_PIN_DIR_FWD=PB0, MOTOR_PIN_DIR_REV=PB1. Internal state: s_motor_state (MotorState_t), s_target_position (uint8), s_movement_active (uint8).
+- MotorController_Init: configures PB0/PB1 as push-pull outputs, sets safe state (STOPPED, target=0, not moving), drives both direction pins low, and starts PWM on TIM3 CH1.
+- MotorController_MoveTo(target): sets s_target_position; reads current via PositionSensing_GetPosition. If equal to target, aborts (no move). Else sets direction pins and s_motor_state (MOVING_FWD if current<target, MOVING_REV otherwise), marks active, and starts PWM. If position read fails, aborts.
+- MotorController_Update: if moving, calls PositionSensing_Update, re-reads position; aborts if PositionSensing_IsAtTarget(target) is true, or if reading fails. Otherwise continues running.
+- MotorController_Abort: forces safe stop (state=STOPPED, inactive), sets both direction pins low, and stops PWM.
+- Accessors: MotorController_GetState returns current state; MotorController_IsMoving returns active flag; MotorController_GetTarget writes target only when not moving, target < 6, and non-null pointer; otherwise returns 0.
+- Dependencies/interfaces: STM32F4 HAL (GPIO, TIM PWM); external timer instance htim3; Position Sensing module (PositionSensing_Update, PositionSensing_GetPosition, PositionSensing_IsAtTarget) to read and evaluate flap position.
+- Safety/error handling and notable assumptions/risks:
+  - Safe outputs enforced on init and abort; early exit if already at target; abort on invalid/out-of-range sensor readings.
+  - No validation/clamping of target in MoveTo (magic limit 6 only applied in GetTarget); relies on PositionSensing for validity.
+  - No timeout/overcurrent/stall detection; if sensor never reports target, motor may run indefinitely.
+  - Direction control is hardware-specific; “forward” state sets REV pin high and FWD low, which may be counterintuitive and depends on H-bridge wiring.
+  - PWM duty not managed here (assumed preconfigured elsewhere). PWM is started during init even when stopped later by Abort; consider power implications.
+  - Not thread/ISR-safe; shared static state has no synchronization.
